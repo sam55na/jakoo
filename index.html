@@ -1,508 +1,416 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>وجه 3D تفاعلي - رأس إنسان حقيقي</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            background: linear-gradient(145deg, #1a1e2b 0%, #2d3348 100%);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
-            padding: 20px;
-        }
-
-        .scene {
-            perspective: 1200px;
-            perspective-origin: 50% 50%;
-            width: 100%;
-            max-width: 700px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .face-container {
-            position: relative;
-            width: 340px;
-            height: 440px;
-            transform-style: preserve-3d;
-            transition: transform 0.08s ease-out;
-            cursor: grab;
-            will-change: transform;
-        }
-
-        .face-container:active {
-            cursor: grabbing;
-        }
-
-        /* ============================================
-           شكل الرأس البشري الحقيقي
-           - أعلى عريض (الجمجمة)
-           - جانبي صدغين عريضين
-           - أسفل مدبب قليلاً (الفك)
-        ============================================ */
-        .face-oval {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            
-            /* ✅ شكل رأس إنسان حقيقي:
-               - 48% للزوايا العلوية (جبهة عريضة)
-               - 42% للزوايا السفلية (فك مدبب قليلاً)
-               - الانحناء الرأسي: 55% أعلى، 45% أسفل
-            */
-            border-radius: 48% 48% 42% 42% / 55% 55% 45% 45%;
-            
-            overflow: hidden;
-            transform-style: preserve-3d;
-            
-            /* ظل خارجي ناعم */
-            box-shadow: 
-                0 30px 60px rgba(0, 0, 0, 0.55),
-                0 15px 30px rgba(0, 0, 0, 0.4),
-                inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-            
-            /* خلفية احتياطية في حال لم تُحمَّل الصورة */
-            background: radial-gradient(circle at 30% 30%, #f5e6d3, #d9c2a7);
-        }
-
-        /* ============================================
-           الصورة - تغطي الشكل بالكامل بدون هوامش
-        ============================================ */
-        .face-image {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;       /* ✅ تغطية كاملة */
-            object-position: center; /* ✅ تمركز */
-            display: block;
-            pointer-events: none;
-            
-            /* ضبط الألوان لمظهر أكثر واقعية */
-            filter: contrast(1.05) brightness(1.02) saturate(1.08);
-            
-            /* بدون border-radius منفصل - الحاوية تقصّه */
-        }
-
-        /* ============================================
-           طبقات العمق (خلف الوجه) - تظهر عند التحريك
-        ============================================ */
-        .face-back {
-            position: absolute;
-            top: 2%;
-            left: 2%;
-            width: 96%;
-            height: 96%;
-            border-radius: 48% 48% 42% 42% / 55% 55% 45% 45%;
-            background: linear-gradient(180deg, #b89b7d 0%, #8a6f55 100%);
-            transform: translateZ(-35px);
-            box-shadow: 
-                inset 0 10px 20px rgba(0, 0, 0, 0.3),
-                0 20px 40px rgba(0, 0, 0, 0.4);
-            z-index: -1;
-        }
-
-        .face-back-2 {
-            position: absolute;
-            top: 5%;
-            left: 5%;
-            width: 90%;
-            height: 90%;
-            border-radius: 48% 48% 42% 42% / 55% 55% 45% 45%;
-            background: linear-gradient(180deg, #9c8166 0%, #6e5540 100%);
-            transform: translateZ(-75px);
-            filter: blur(3px);
-            opacity: 0.75;
-            z-index: -2;
-        }
-
-        /* ============================================
-           إضاءة وظل فوق الصورة (بدون قصّ)
-        ============================================ */
-        .face-light {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            border-radius: inherit;
-            background: radial-gradient(
-                circle at 35% 30%,
-                rgba(255, 255, 255, 0.35) 0%,
-                rgba(255, 255, 255, 0.08) 40%,
-                transparent 75%
-            );
-            mix-blend-mode: overlay;
-        }
-
-        .face-shadow {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            border-radius: inherit;
-            background: radial-gradient(
-                circle at 70% 85%,
-                rgba(0, 0, 0, 0.35) 0%,
-                transparent 70%
-            );
-            mix-blend-mode: multiply;
-        }
-
-        /* إضاءة جانبية تظهر عند التحريك */
-        .face-side-highlight {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            border-radius: inherit;
-            background: linear-gradient(90deg,
-                rgba(255, 255, 255, 0.18) 0%,
-                transparent 30%,
-                transparent 70%,
-                rgba(0, 0, 0, 0.18) 100%);
-            mix-blend-mode: overlay;
-            opacity: 0.7;
-        }
-
-        /* ============================================
-           أزرار التحكم
-        ============================================ */
-        .controls {
-            margin-top: 30px;
-            display: flex;
-            gap: 14px;
-            flex-wrap: wrap;
-            justify-content: center;
-            background: rgba(20, 24, 33, 0.7);
-            backdrop-filter: blur(10px);
-            padding: 14px 24px;
-            border-radius: 60px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
-        }
-
-        .controls button {
-            background: rgba(255, 255, 255, 0.08);
-            border: none;
-            color: #eaeef5;
-            font-size: 1rem;
-            font-weight: 500;
-            padding: 10px 22px;
-            border-radius: 40px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .controls button:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.02);
-            border-color: rgba(255, 255, 255, 0.3);
-        }
-
-        .controls button:active {
-            transform: scale(0.98);
-        }
-
-        .controls button i {
-            font-style: normal;
-            font-size: 1.2rem;
-        }
-
-        /* ============================================
-           قسم رفع الصورة
-        ============================================ */
-        .upload-section {
-            margin-top: 20px;
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            background: rgba(20, 24, 33, 0.7);
-            backdrop-filter: blur(10px);
-            padding: 12px 20px;
-            border-radius: 40px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
-        }
-
-        .upload-label {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            background: linear-gradient(135deg, #6a5acd, #8a7bdd);
-            color: white;
-            padding: 10px 22px;
-            border-radius: 40px;
-            cursor: pointer;
-            font-weight: 500;
-            font-size: 0.95rem;
-            transition: all 0.2s ease;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 4px 15px rgba(106, 90, 205, 0.4);
-        }
-
-        .upload-label:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(106, 90, 205, 0.6);
-        }
-
-        .upload-label:active {
-            transform: translateY(0);
-        }
-
-        .upload-label input[type="file"] {
-            display: none;
-        }
-
-        .hint {
-            margin-top: 18px;
-            color: #b0b8c5;
-            font-size: 0.85rem;
-            text-align: center;
-            letter-spacing: 0.3px;
-            background: rgba(0,0,0,0.3);
-            padding: 8px 20px;
-            border-radius: 40px;
-            backdrop-filter: blur(5px);
-            max-width: 500px;
-            line-height: 1.5;
-        }
-
-        .face-container {
-            transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1);
-        }
-
-        /* ظل أرضي */
-        .ground-shadow {
-            position: absolute;
-            bottom: -55px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 65%;
-            height: 32px;
-            background: radial-gradient(ellipse, rgba(0, 0, 0, 0.55) 0%, transparent 70%);
-            border-radius: 50%;
-            filter: blur(12px);
-            pointer-events: none;
-            z-index: -3;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a1e2b">
+  <title>رأس إنسان ثلاثي الأبعاد</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow-x: hidden;
+      color: #eaeef5;
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      background: radial-gradient(ellipse at 50% 36%, #343b51 0%, #252b3b 46%, #171b26 100%);
+    }
+    .scene {
+      width: 100%;
+      max-width: 700px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      perspective: 1200px;
+    }
+    .face-container {
+      position: relative;
+      width: min(420px, 88vw);
+      height: min(500px, 64vh);
+      min-height: 360px;
+      touch-action: none;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+      filter: drop-shadow(0 30px 30px rgba(0,0,0,.34));
+    }
+    .face-container:active { cursor: grabbing; }
+    .face-container canvas { display: block; width: 100%; height: 100%; outline: none; }
+    .ground-shadow {
+      position: absolute;
+      left: 50%; bottom: 2%; z-index: -1;
+      width: 54%; height: 30px;
+      transform: translateX(-50%);
+      border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(0,0,0,.64), transparent 72%);
+      filter: blur(11px);
+      pointer-events: none;
+    }
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      padding: 13px 20px;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 60px;
+      background: rgba(20,24,33,.72);
+      box-shadow: 0 15px 35px rgba(0,0,0,.36);
+      backdrop-filter: blur(10px);
+    }
+    .controls button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 40px;
+      color: #eaeef5;
+      background: rgba(255,255,255,.08);
+      box-shadow: 0 4px 10px rgba(0,0,0,.22);
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .2s, transform .2s, border-color .2s;
+    }
+    .controls button:hover { background: rgba(255,255,255,.18); transform: scale(1.03); border-color: rgba(255,255,255,.3); }
+    .controls button:active { transform: scale(.98); }
+    .controls button i { font-style: normal; font-size: 1.2rem; }
+    .upload-section {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 20px;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 40px;
+      background: rgba(20,24,33,.72);
+      box-shadow: 0 10px 25px rgba(0,0,0,.3);
+      backdrop-filter: blur(10px);
+    }
+    .upload-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 22px;
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 40px;
+      color: white;
+      background: linear-gradient(135deg,#6a5acd,#8a7bdd);
+      box-shadow: 0 4px 15px rgba(106,90,205,.38);
+      font-size: .95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .upload-label:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(106,90,205,.55); }
+    .upload-label input { display: none; }
+    .hint {
+      max-width: min(540px, 92vw);
+      margin-top: 14px;
+      padding: 9px 17px;
+      border-radius: 30px;
+      color: #b0b8c5;
+      background: rgba(0,0,0,.26);
+      font-size: .84rem;
+      line-height: 1.6;
+      text-align: center;
+    }
+    .status { min-height: 1.3em; margin-top: 6px; color: #d4d9e2; font-size: .8rem; text-align: center; }
+    @media (max-width: 480px) {
+      body { padding: 12px; }
+      .face-container { height: min(460px, 59vh); min-height: 330px; }
+      .controls { gap: 8px; padding: 10px 12px; }
+      .controls button { padding: 9px 13px; font-size: .9rem; }
+    }
+  </style>
 </head>
 <body>
-    <div class="scene">
-        <div class="face-container" id="faceContainer">
-            <!-- طبقات العمق خلف الرأس -->
-            <div class="face-back-2"></div>
-            <div class="face-back"></div>
-            
-            <!-- الرأس (الصورة داخله) -->
-            <div class="face-oval">
-                <img 
-                    class="face-image" 
-                    id="faceImage"
-                    src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80&ixlib=rb-4.0.3"
-                    alt="وجه 3D"
-                    crossorigin="anonymous"
-                >
-                <div class="face-light"></div>
-                <div class="face-shadow"></div>
-                <div class="face-side-highlight"></div>
-            </div>
-
-            <div class="ground-shadow"></div>
-        </div>
+  <main class="scene" aria-label="عارض رأس إنسان ثلاثي الأبعاد">
+    <div class="face-container" id="faceContainer" role="img" aria-label="رأس ثلاثي الأبعاد قابل للدوران">
+      <div class="ground-shadow"></div>
     </div>
+  </main>
 
-    <div class="controls">
-        <button id="leftBtn" title="تحريك لليسار"><i>←</i> يسار</button>
-        <button id="upBtn" title="تحريك للأعلى"><i>↑</i> أعلى</button>
-        <button id="rightBtn" title="تحريك لليمين"><i>→</i> يمين</button>
-        <button id="resetBtn" title="إعادة تعيين"><i>⟲</i> إعادة</button>
-    </div>
+  <nav class="controls" aria-label="أدوات تدوير الرأس">
+    <button id="leftBtn" title="تحريك لليسار"><i>←</i> يسار</button>
+    <button id="upBtn" title="إمالة الرأس"><i>↑</i> أعلى</button>
+    <button id="rightBtn" title="تحريك لليمين"><i>→</i> يمين</button>
+    <button id="resetBtn" title="إعادة تعيين"><i>⟲</i> إعادة</button>
+  </nav>
 
-    <div class="upload-section">
-        <label class="upload-label" for="imageUpload">
-            <i>📷</i> اختر صورة وجهك
-            <input type="file" id="imageUpload" accept="image/*">
-        </label>
-    </div>
+  <section class="upload-section" aria-label="رفع صورة">
+    <label class="upload-label" for="imageUpload">
+      <span aria-hidden="true">📷</span> اختر صورة وجهك
+      <input type="file" id="imageUpload" accept="image/*">
+    </label>
+  </section>
+  <p class="hint">اسحب الرأس بالفأرة أو اللمس لتدويره، أو استخدم الأزرار. للحصول على أفضل نتيجة، ارفع صورة أمامية واضحة للوجه بإضاءة جيدة.</p>
+  <p class="status" id="status" aria-live="polite"></p>
 
-    <div class="hint">
-        🖱️ اسحب الرأس بالفأرة أو اللمس &nbsp;|&nbsp; 📷 ارفع صورتك لتظهر داخل الرأس مباشرة
-    </div>
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js';
 
-    <script>
-        (function() {
-            const face = document.getElementById('faceContainer');
-            const faceImage = document.getElementById('faceImage');
-            const fileInput = document.getElementById('imageUpload');
-            
-            let rotY = 0;
-            let rotX = 0;
-            let targetRotY = 0;
-            let targetRotX = 0;
-            
-            const MAX_Y = 30;
-            const MAX_X = 22;
-            const SMOOTH_FACTOR = 0.12;
-            
-            let isDragging = false;
-            let previousMouseX = 0;
-            let previousMouseY = 0;
-            let dragStartRotY = 0;
-            let dragStartRotX = 0;
-            
-            function updateTransform() {
-                const zOffset = Math.abs(rotY) * 0.5 + Math.abs(rotX) * 0.5;
-                face.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(${zOffset}px)`;
-            }
-            
-            function animate() {
-                rotY += (targetRotY - rotY) * SMOOTH_FACTOR;
-                rotX += (targetRotX - rotX) * SMOOTH_FACTOR;
-                
-                rotY = Math.max(-MAX_Y, Math.min(MAX_Y, rotY));
-                rotX = Math.max(-MAX_X, Math.min(MAX_X, rotX));
-                
-                updateTransform();
-                requestAnimationFrame(animate);
-            }
-            
-            animate();
-            
-            // الأزرار
-            document.getElementById('leftBtn').addEventListener('click', () => {
-                targetRotY = Math.max(-MAX_Y, targetRotY - 8);
-            });
-            
-            document.getElementById('rightBtn').addEventListener('click', () => {
-                targetRotY = Math.min(MAX_Y, targetRotY + 8);
-            });
-            
-            document.getElementById('upBtn').addEventListener('click', () => {
-                targetRotX = Math.min(MAX_X, targetRotX + 6);
-            });
-            
-            document.getElementById('resetBtn').addEventListener('click', () => {
-                targetRotY = 0;
-                targetRotX = 0;
-            });
-            
-            // رفع الصورة
-            fileInput.addEventListener('change', (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                
-                if (!file.type.startsWith('image/')) {
-                    alert('الرجاء اختيار ملف صورة صالح');
-                    return;
-                }
-                
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    faceImage.src = event.target.result;
-                    faceImage.removeAttribute('crossorigin');
-                    
-                    faceImage.style.opacity = '0';
-                    setTimeout(() => {
-                        faceImage.style.transition = 'opacity 0.5s ease';
-                        faceImage.style.opacity = '1';
-                    }, 50);
-                };
-                reader.readAsDataURL(file);
-            });
-            
-            // السحب بالفأرة
-            face.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                previousMouseX = e.clientX;
-                previousMouseY = e.clientY;
-                dragStartRotY = targetRotY;
-                dragStartRotX = targetRotX;
-                face.style.cursor = 'grabbing';
-                e.preventDefault();
-            });
-            
-            window.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                
-                const deltaX = e.clientX - previousMouseX;
-                const deltaY = e.clientY - previousMouseY;
-                
-                let newRotY = dragStartRotY + deltaX * 0.5;
-                let newRotX = dragStartRotX - deltaY * 0.4;
-                
-                targetRotY = Math.max(-MAX_Y, Math.min(MAX_Y, newRotY));
-                targetRotX = Math.max(-MAX_X, Math.min(MAX_X, newRotX));
-            });
-            
-            window.addEventListener('mouseup', () => {
-                if (isDragging) {
-                    isDragging = false;
-                    face.style.cursor = 'grab';
-                }
-            });
-            
-            face.addEventListener('dragstart', (e) => e.preventDefault());
-            
-            // اللمس
-            face.addEventListener('touchstart', (e) => {
-                isDragging = true;
-                const touch = e.touches[0];
-                previousMouseX = touch.clientX;
-                previousMouseY = touch.clientY;
-                dragStartRotY = targetRotY;
-                dragStartRotX = targetRotX;
-                e.preventDefault();
-            }, { passive: false });
-            
-            window.addEventListener('touchmove', (e) => {
-                if (!isDragging) return;
-                const touch = e.touches[0];
-                const deltaX = touch.clientX - previousMouseX;
-                const deltaY = touch.clientY - previousMouseY;
-                
-                let newRotY = dragStartRotY + deltaX * 0.5;
-                let newRotX = dragStartRotX - deltaY * 0.4;
-                
-                targetRotY = Math.max(-MAX_Y, Math.min(MAX_Y, newRotY));
-                targetRotX = Math.max(-MAX_X, Math.min(MAX_X, newRotX));
-                e.preventDefault();
-            }, { passive: false });
-            
-            window.addEventListener('touchend', () => {
-                isDragging = false;
-            });
-            
-            face.style.cursor = 'grab';
-            face.style.transition = 'transform 0.08s ease-out';
-        })();
-    </script>
+    const container = document.getElementById('faceContainer');
+    const upload = document.getElementById('imageUpload');
+    const status = document.getElementById('status');
+    const scene = new THREE.Scene();
+    scene.background = null;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    container.prepend(renderer.domElement);
+
+    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
+    camera.position.set(0, 0.05, 6.25);
+
+    scene.add(new THREE.HemisphereLight(0xe5edff, 0x453326, 2.0));
+    const keyLight = new THREE.DirectionalLight(0xffe2ca, 3.0);
+    keyLight.position.set(-3.5, 4.5, 5.0);
+    scene.add(keyLight);
+    const fillLight = new THREE.DirectionalLight(0xc6d5ff, 1.35);
+    fillLight.position.set(4.0, 1.0, 3.0);
+    scene.add(fillLight);
+    const rimLight = new THREE.DirectionalLight(0xffcda9, 2.0);
+    rimLight.position.set(1.5, 3.0, -3.0);
+    scene.add(rimLight);
+
+    const headGroup = new THREE.Group();
+    scene.add(headGroup);
+
+    const TEX_W = 2048, TEX_H = 1024;
+    const skinCanvas = document.createElement('canvas');
+    skinCanvas.width = TEX_W; skinCanvas.height = TEX_H;
+    const skinCtx = skinCanvas.getContext('2d');
+    let currentPhoto = null;
+    let headTexture;
+
+    function smoothstep(a, b, x) {
+      const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
+      return t * t * (3 - 2 * t);
+    }
+
+    function drawCover(ctx, image, x, y, width, height) {
+      const scale = Math.max(width / image.width, height / image.height);
+      const sw = width / scale, sh = height / scale;
+      const sx = (image.width - sw) / 2;
+      const sy = (image.height - sh) / 2;
+      ctx.drawImage(image, sx, sy, sw, sh, x, y, width, height);
+    }
+
+    function paintHeadTexture() {
+      const base = skinCtx.createLinearGradient(0, 0, 0, TEX_H);
+      base.addColorStop(0, '#d4ae91');
+      base.addColorStop(.5, '#c79a7d');
+      base.addColorStop(1, '#a97d64');
+      skinCtx.fillStyle = base;
+      skinCtx.fillRect(0, 0, TEX_W, TEX_H);
+      // Softly blend a portrait into the front-facing UV region of the head.
+      if (currentPhoto) {
+        const layer = document.createElement('canvas');
+        layer.width = TEX_W; layer.height = TEX_H;
+        const ctx = layer.getContext('2d');
+        const x = TEX_W * .315, y = TEX_H * .115, w = TEX_W * .37, h = TEX_H * .79;
+        drawCover(ctx, currentPhoto, x, y, w, h);
+        ctx.globalCompositeOperation = 'destination-in';
+        const fade = ctx.createRadialGradient(TEX_W * .5, TEX_H * .5, TEX_H * .19, TEX_W * .5, TEX_H * .5, TEX_H * .43);
+        fade.addColorStop(0, 'rgba(255,255,255,1)');
+        fade.addColorStop(.72, 'rgba(255,255,255,.98)');
+        fade.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = fade;
+        ctx.fillRect(x, y, w, h);
+        skinCtx.drawImage(layer, 0, 0);
+      }
+      if (headTexture) headTexture.needsUpdate = true;
+    }
+
+    headTexture = new THREE.CanvasTexture(skinCanvas);
+    headTexture.colorSpace = THREE.SRGBColorSpace;
+    headTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    paintHeadTexture();
+
+    // Parametric skull surface: broad cranium, narrower jaw, and gentle facial relief.
+    function makeHeadGeometry() {
+      const around = 192, vertical = 160;
+      const positions = [], uvs = [], indices = [];
+      const rx = .91, rz = .76, halfHeight = 1.36;
+      for (let j = 0; j <= vertical; j++) {
+        const v = j / vertical;
+        const y = (v - .5) * 2 * halfHeight;
+        const yn = y / halfHeight;
+        const ring = Math.pow(Math.max(0, 1 - yn * yn), .62);
+        const lowerJaw = 1 - smoothstep(-1.12, -.12, y);
+        const jawWidth = 1 - .24 * lowerJaw;
+        const cheekFullness = 1 + .035 * Math.exp(-Math.pow((y + .12) / .36, 2));
+        for (let i = 0; i <= around; i++) {
+          const u = i / around;
+          const theta = (u - .5) * Math.PI * 2;
+          const s = Math.sin(theta), c = Math.cos(theta);
+          const x = rx * ring * jawWidth * cheekFullness * s;
+          let z = rz * ring * (1 + .025 * smoothstep(-.5, .8, y)) * c;
+          if (c > 0) {
+            const front = Math.pow(c, 5);
+            const g = (cx, cy, wx, wy) => Math.exp(-Math.pow((x-cx)/wx, 2) - Math.pow((y-cy)/wy, 2));
+            let relief = 0;
+            // Nose bridge and tip; cheek, brow, chin, and subtle eye-socket relief.
+            relief += .115 * g(0, .02, .115, .42);
+            relief += .16 * g(0, -.23, .18, .19);
+            relief += .045 * (g(-.115, -.30, .055, .045) + g(.115, -.30, .055, .045));
+            relief += .055 * (g(-.28, .47, .22, .09) + g(.28, .47, .22, .09));
+            relief -= .045 * (g(-.28, .31, .19, .105) + g(.28, .31, .19, .105));
+            relief += .075 * (g(-.43, -.05, .23, .20) + g(.43, -.05, .23, .20));
+            relief += .035 * g(0, -.48, .27, .11);
+            relief += .065 * g(0, -.91, .30, .18);
+            relief += .018 * (g(-.105, -.42, .08, .035) + g(.105, -.42, .08, .035));
+            z += front * relief;
+          }
+          positions.push(x, y, z);
+          uvs.push(u, v);
+          if (j < vertical && i < around) {
+            const a = j * (around + 1) + i;
+            const b = a + around + 1;
+            indices.push(a, a + 1, b, b, a + 1, b + 1);
+          }
+        }
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+
+    const skinMaterial = new THREE.MeshStandardMaterial({
+      map: headTexture,
+      color: 0xffffff,
+      roughness: .83,
+      metalness: 0,
+      side: THREE.DoubleSide
+    });
+    const head = new THREE.Mesh(makeHeadGeometry(), skinMaterial);
+    head.position.y = .12;
+    headGroup.add(head);
+
+    // Ears and a short neck add recognizable side and lower-head volume.
+    const earMaterial = new THREE.MeshStandardMaterial({ color: 0xb9876c, roughness: .9 });
+    const earInnerMaterial = new THREE.MeshStandardMaterial({ color: 0x805846, roughness: 1 });
+    const earGeo = new THREE.SphereGeometry(1, 40, 32);
+    for (const side of [-1, 1]) {
+      const ear = new THREE.Mesh(earGeo, earMaterial);
+      ear.scale.set(.19, .31, .115);
+      ear.position.set(side * .85, .08, -.005);
+      headGroup.add(ear);
+      const concha = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20), earInnerMaterial);
+      concha.scale.set(.075, .17, .025);
+      concha.position.set(side * .91, .08, .094);
+      headGroup.add(concha);
+    }
+    const neck = new THREE.Mesh(
+      new THREE.CylinderGeometry(.39, .49, .72, 64, 1, false),
+      new THREE.MeshStandardMaterial({ color: 0xb98b70, roughness: .88 })
+    );
+    neck.position.set(0, -1.45, -.20);
+    neck.scale.z = .77;
+    headGroup.add(neck);
+
+    let rotY = 0, rotX = 0, targetRotY = 0, targetRotX = 0;
+    const MAX_Y = 38, MAX_X = 24, SMOOTH = .12;
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    let dragging = false, startX = 0, startY = 0, startRotY = 0, startRotX = 0;
+
+    function resize() {
+      const width = Math.max(1, container.clientWidth);
+      const height = Math.max(1, container.clientHeight);
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.position.z = width < 360 ? 6.7 : 6.25;
+      camera.updateProjectionMatrix();
+    }
+    new ResizeObserver(resize).observe(container);
+    window.addEventListener('resize', resize);
+    resize();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      rotY += (targetRotY - rotY) * SMOOTH;
+      rotX += (targetRotX - rotX) * SMOOTH;
+      headGroup.rotation.set(THREE.MathUtils.degToRad(rotX), THREE.MathUtils.degToRad(rotY), 0);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    document.getElementById('leftBtn').addEventListener('click', () => { targetRotY = clamp(targetRotY - 8, -MAX_Y, MAX_Y); });
+    document.getElementById('rightBtn').addEventListener('click', () => { targetRotY = clamp(targetRotY + 8, -MAX_Y, MAX_Y); });
+    document.getElementById('upBtn').addEventListener('click', () => { targetRotX = clamp(targetRotX + 6, -MAX_X, MAX_X); });
+    document.getElementById('resetBtn').addEventListener('click', () => { targetRotY = 0; targetRotX = 0; });
+
+    container.addEventListener('pointerdown', (event) => {
+      if (event.target !== renderer.domElement) return;
+      dragging = true;
+      startX = event.clientX; startY = event.clientY;
+      startRotY = targetRotY; startRotX = targetRotX;
+      container.setPointerCapture?.(event.pointerId);
+      event.preventDefault();
+    });
+    container.addEventListener('pointermove', (event) => {
+      if (!dragging) return;
+      targetRotY = clamp(startRotY + (event.clientX - startX) * .48, -MAX_Y, MAX_Y);
+      targetRotX = clamp(startRotX - (event.clientY - startY) * .38, -MAX_X, MAX_X);
+    });
+    const stopDrag = () => { dragging = false; };
+    container.addEventListener('pointerup', stopDrag);
+    container.addEventListener('pointercancel', stopDrag);
+    container.addEventListener('lostpointercapture', stopDrag);
+
+    let userUploadedPhoto = false;
+    upload.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        alert('الرجاء اختيار ملف صورة صالح');
+        upload.value = '';
+        return;
+      }
+      const image = new Image();
+      image.onload = () => {
+        userUploadedPhoto = true;
+        currentPhoto = image;
+        paintHeadTexture();
+        status.textContent = 'تم تطبيق الصورة على سطح الرأس ثلاثي الأبعاد.';
+        URL.revokeObjectURL(image.src);
+      };
+      image.onerror = () => {
+        status.textContent = 'تعذر تحميل الصورة. جرّب ملف صورة آخر.';
+        URL.revokeObjectURL(image.src);
+      };
+      image.src = URL.createObjectURL(file);
+    });
+
+    // Keep the original sample portrait as an optional starting texture; local upload works offline afterward.
+    const sample = new Image();
+    sample.crossOrigin = 'anonymous';
+    sample.onload = () => {
+      if (!userUploadedPhoto) { currentPhoto = sample; paintHeadTexture(); }
+    };
+    sample.onerror = () => {};
+    sample.src = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80&ixlib=rb-4.0.3';
+
+    window.addEventListener('beforeunload', () => {
+      headTexture.dispose();
+      skinMaterial.dispose();
+      renderer.dispose();
+    });
+  </script>
 </body>
 </html>
+
