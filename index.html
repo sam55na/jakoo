@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>وجه 3D تفاعلي - بيضوي مقلوب مع رفع صورة</title>
+    <title>وجه 3D تفاعلي - رأس إنسان حقيقي</title>
     <style>
         * {
             margin: 0;
@@ -41,7 +41,6 @@
             transition: transform 0.08s ease-out;
             cursor: grab;
             will-change: transform;
-            filter: drop-shadow(0 25px 40px rgba(0, 0, 0, 0.6));
         }
 
         .face-container:active {
@@ -49,58 +48,40 @@
         }
 
         /* ============================================
-           الشكل البيضوي الأساسي - تم قلبه
-           الأعلى أصبح الأسفل والعكس
+           شكل الرأس البشري الحقيقي
+           - أعلى عريض (الجمجمة)
+           - جانبي صدغين عريضين
+           - أسفل مدبب قليلاً (الفك)
         ============================================ */
         .face-oval {
             position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-            /* ✅ الشكل المقلوب: الجزء السفلي عريض (كان الجزء العلوي في الأصل) */
-            border-radius: 45% 45% 50% 50% / 45% 45% 55% 55%;
-            background: radial-gradient(circle at 30% 30%, #f5e6d3, #d9c2a7);
-            box-shadow: 
-                inset 0 20px 30px rgba(255, 255, 255, 0.6),
-                inset 0 -20px 30px rgba(0, 0, 0, 0.2),
-                0 30px 50px rgba(0, 0, 0, 0.5);
+            
+            /* ✅ شكل رأس إنسان حقيقي:
+               - 48% للزوايا العلوية (جبهة عريضة)
+               - 42% للزوايا السفلية (فك مدبب قليلاً)
+               - الانحناء الرأسي: 55% أعلى، 45% أسفل
+            */
+            border-radius: 48% 48% 42% 42% / 55% 55% 45% 45%;
+            
             overflow: hidden;
             transform-style: preserve-3d;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-
-        /* طبقة خلفية للرأس لإعطاء عمق 3D عند التحريك */
-        .face-back {
-            position: absolute;
-            top: 4%;
-            left: 4%;
-            width: 92%;
-            height: 92%;
-            border-radius: inherit;
-            background: linear-gradient(180deg, #b89b7d 0%, #8a6f55 100%);
-            transform: translateZ(-40px);
+            
+            /* ظل خارجي ناعم */
             box-shadow: 
-                inset 0 10px 20px rgba(0, 0, 0, 0.3),
-                0 20px 40px rgba(0, 0, 0, 0.4);
-            z-index: -1;
-        }
-
-        /* طبقة إضافية للعمق عند التحريك يمين/يسار */
-        .face-back-2 {
-            position: absolute;
-            top: 8%;
-            left: 8%;
-            width: 84%;
-            height: 84%;
-            border-radius: inherit;
-            background: linear-gradient(180deg, #9c8166 0%, #6e5540 100%);
-            transform: translateZ(-80px);
-            filter: blur(2px);
-            opacity: 0.7;
-            z-index: -2;
+                0 30px 60px rgba(0, 0, 0, 0.55),
+                0 15px 30px rgba(0, 0, 0, 0.4),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+            
+            /* خلفية احتياطية في حال لم تُحمَّل الصورة */
+            background: radial-gradient(circle at 30% 30%, #f5e6d3, #d9c2a7);
         }
 
         /* ============================================
-           الصورة داخل الوجه - تم قلب clip-path أيضاً
+           الصورة - تغطي الشكل بالكامل بدون هوامش
         ============================================ */
         .face-image {
             position: absolute;
@@ -108,68 +89,106 @@
             left: 0;
             width: 100%;
             height: 100%;
-            object-fit: cover;
-            border-radius: inherit;
-            opacity: 0.98;
-            filter: contrast(1.08) brightness(1.02) saturate(1.1);
+            object-fit: cover;       /* ✅ تغطية كاملة */
+            object-position: center; /* ✅ تمركز */
             display: block;
             pointer-events: none;
-            /* ✅ شكل القص البيضوي المقلوب */
-            clip-path: ellipse(50% 55% at 50% 55%);
+            
+            /* ضبط الألوان لمظهر أكثر واقعية */
+            filter: contrast(1.05) brightness(1.02) saturate(1.08);
+            
+            /* بدون border-radius منفصل - الحاوية تقصّه */
         }
 
-        /* طبقة إضاءة علوية - تم عكسها لتناسب الشكل المقلوب */
+        /* ============================================
+           طبقات العمق (خلف الوجه) - تظهر عند التحريك
+        ============================================ */
+        .face-back {
+            position: absolute;
+            top: 2%;
+            left: 2%;
+            width: 96%;
+            height: 96%;
+            border-radius: 48% 48% 42% 42% / 55% 55% 45% 45%;
+            background: linear-gradient(180deg, #b89b7d 0%, #8a6f55 100%);
+            transform: translateZ(-35px);
+            box-shadow: 
+                inset 0 10px 20px rgba(0, 0, 0, 0.3),
+                0 20px 40px rgba(0, 0, 0, 0.4);
+            z-index: -1;
+        }
+
+        .face-back-2 {
+            position: absolute;
+            top: 5%;
+            left: 5%;
+            width: 90%;
+            height: 90%;
+            border-radius: 48% 48% 42% 42% / 55% 55% 45% 45%;
+            background: linear-gradient(180deg, #9c8166 0%, #6e5540 100%);
+            transform: translateZ(-75px);
+            filter: blur(3px);
+            opacity: 0.75;
+            z-index: -2;
+        }
+
+        /* ============================================
+           إضاءة وظل فوق الصورة (بدون قصّ)
+        ============================================ */
         .face-light {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            border-radius: inherit;
-            background: radial-gradient(circle at 35% 65%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.1) 50%, transparent 80%);
             pointer-events: none;
+            border-radius: inherit;
+            background: radial-gradient(
+                circle at 35% 30%,
+                rgba(255, 255, 255, 0.35) 0%,
+                rgba(255, 255, 255, 0.08) 40%,
+                transparent 75%
+            );
             mix-blend-mode: overlay;
-            clip-path: ellipse(50% 55% at 50% 55%);
         }
 
-        /* طبقة ظل - تم عكسها */
         .face-shadow {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            border-radius: inherit;
-            background: radial-gradient(circle at 70% 20%, rgba(0, 0, 0, 0.3) 0%, transparent 70%);
             pointer-events: none;
+            border-radius: inherit;
+            background: radial-gradient(
+                circle at 70% 85%,
+                rgba(0, 0, 0, 0.35) 0%,
+                transparent 70%
+            );
             mix-blend-mode: multiply;
-            clip-path: ellipse(50% 55% at 50% 55%);
         }
 
-        /* ============================================
-           تحسين العمق ثلاثي الأبعاد عند التحريك
-        ============================================ */
-        
-        /* انعكاس خفيف على الجانب - يظهر عند التحريك يمين/يسار */
+        /* إضاءة جانبية تظهر عند التحريك */
         .face-side-highlight {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            border-radius: inherit;
-            background: linear-gradient(90deg, 
-                rgba(255, 255, 255, 0.25) 0%, 
-                transparent 25%, 
-                transparent 75%, 
-                rgba(0, 0, 0, 0.2) 100%);
             pointer-events: none;
+            border-radius: inherit;
+            background: linear-gradient(90deg,
+                rgba(255, 255, 255, 0.18) 0%,
+                transparent 30%,
+                transparent 70%,
+                rgba(0, 0, 0, 0.18) 100%);
             mix-blend-mode: overlay;
-            clip-path: ellipse(50% 55% at 50% 55%);
-            opacity: 0.6;
+            opacity: 0.7;
         }
 
-        /* أزرار التحكم */
+        /* ============================================
+           أزرار التحكم
+        ============================================ */
         .controls {
             margin-top: 30px;
             display: flex;
@@ -194,7 +213,6 @@
             border-radius: 40px;
             cursor: pointer;
             transition: all 0.2s ease;
-            letter-spacing: 0.5px;
             border: 1px solid rgba(255, 255, 255, 0.15);
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
             display: flex;
@@ -217,7 +235,9 @@
             font-size: 1.2rem;
         }
 
-        /* قسم رفع الصورة */
+        /* ============================================
+           قسم رفع الصورة
+        ============================================ */
         .upload-section {
             margin-top: 20px;
             display: flex;
@@ -270,7 +290,7 @@
             padding: 8px 20px;
             border-radius: 40px;
             backdrop-filter: blur(5px);
-            max-width: 480px;
+            max-width: 500px;
             line-height: 1.5;
         }
 
@@ -278,17 +298,17 @@
             transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1);
         }
 
-        /* تأثير الظل على الأرض */
+        /* ظل أرضي */
         .ground-shadow {
             position: absolute;
-            bottom: -50px;
+            bottom: -55px;
             left: 50%;
             transform: translateX(-50%);
-            width: 60%;
-            height: 30px;
-            background: radial-gradient(ellipse, rgba(0, 0, 0, 0.5) 0%, transparent 70%);
+            width: 65%;
+            height: 32px;
+            background: radial-gradient(ellipse, rgba(0, 0, 0, 0.55) 0%, transparent 70%);
             border-radius: 50%;
-            filter: blur(10px);
+            filter: blur(12px);
             pointer-events: none;
             z-index: -3;
         }
@@ -297,13 +317,12 @@
 <body>
     <div class="scene">
         <div class="face-container" id="faceContainer">
-            <!-- طبقات العمق الخلفية (للرأس 3D) -->
+            <!-- طبقات العمق خلف الرأس -->
             <div class="face-back-2"></div>
             <div class="face-back"></div>
             
-            <!-- الوجه الأمامي -->
+            <!-- الرأس (الصورة داخله) -->
             <div class="face-oval">
-                <!-- صورة الوجه الافتراضية -->
                 <img 
                     class="face-image" 
                     id="faceImage"
@@ -311,18 +330,15 @@
                     alt="وجه 3D"
                     crossorigin="anonymous"
                 >
-                <!-- طبقات الإضاءة والظل -->
                 <div class="face-light"></div>
                 <div class="face-shadow"></div>
                 <div class="face-side-highlight"></div>
             </div>
 
-            <!-- ظل الأرض -->
             <div class="ground-shadow"></div>
         </div>
     </div>
 
-    <!-- أزرار التحكم بالحركة -->
     <div class="controls">
         <button id="leftBtn" title="تحريك لليسار"><i>←</i> يسار</button>
         <button id="upBtn" title="تحريك للأعلى"><i>↑</i> أعلى</button>
@@ -330,7 +346,6 @@
         <button id="resetBtn" title="إعادة تعيين"><i>⟲</i> إعادة</button>
     </div>
 
-    <!-- قسم رفع الصورة -->
     <div class="upload-section">
         <label class="upload-label" for="imageUpload">
             <i>📷</i> اختر صورة وجهك
@@ -339,7 +354,7 @@
     </div>
 
     <div class="hint">
-        🖱️ اسحب الوجه بالفأرة أو اللمس لتحريكه &nbsp;|&nbsp; 📷 ارفع صورتك لتظهر داخل الوجه
+        🖱️ اسحب الرأس بالفأرة أو اللمس &nbsp;|&nbsp; 📷 ارفع صورتك لتظهر داخل الرأس مباشرة
     </div>
 
     <script>
@@ -363,9 +378,7 @@
             let dragStartRotY = 0;
             let dragStartRotX = 0;
             
-            // تحديث التحويل مع إضافة إزاحة خفيفة للعمق
             function updateTransform() {
-                // إضافة translateZ خفيف حسب الدوران لإبراز العمق
                 const zOffset = Math.abs(rotY) * 0.5 + Math.abs(rotX) * 0.5;
                 face.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(${zOffset}px)`;
             }
@@ -383,7 +396,7 @@
             
             animate();
             
-            // -------------------- الأزرار --------------------
+            // الأزرار
             document.getElementById('leftBtn').addEventListener('click', () => {
                 targetRotY = Math.max(-MAX_Y, targetRotY - 8);
             });
@@ -401,12 +414,11 @@
                 targetRotX = 0;
             });
             
-            // -------------------- رفع الصورة --------------------
+            // رفع الصورة
             fileInput.addEventListener('change', (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 
-                // التحقق من أن الملف صورة
                 if (!file.type.startsWith('image/')) {
                     alert('الرجاء اختيار ملف صورة صالح');
                     return;
@@ -417,17 +429,16 @@
                     faceImage.src = event.target.result;
                     faceImage.removeAttribute('crossorigin');
                     
-                    // تأثير ظهور ناعم
                     faceImage.style.opacity = '0';
                     setTimeout(() => {
                         faceImage.style.transition = 'opacity 0.5s ease';
-                        faceImage.style.opacity = '0.98';
+                        faceImage.style.opacity = '1';
                     }, 50);
                 };
                 reader.readAsDataURL(file);
             });
             
-            // -------------------- السحب بالفأرة --------------------
+            // السحب بالفأرة
             face.addEventListener('mousedown', (e) => {
                 isDragging = true;
                 previousMouseX = e.clientX;
@@ -444,11 +455,8 @@
                 const deltaX = e.clientX - previousMouseX;
                 const deltaY = e.clientY - previousMouseY;
                 
-                const sensitivityY = 0.5;
-                const sensitivityX = 0.4;
-                
-                let newRotY = dragStartRotY + deltaX * sensitivityY;
-                let newRotX = dragStartRotX - deltaY * sensitivityX;
+                let newRotY = dragStartRotY + deltaX * 0.5;
+                let newRotX = dragStartRotX - deltaY * 0.4;
                 
                 targetRotY = Math.max(-MAX_Y, Math.min(MAX_Y, newRotY));
                 targetRotX = Math.max(-MAX_X, Math.min(MAX_X, newRotX));
@@ -463,7 +471,7 @@
             
             face.addEventListener('dragstart', (e) => e.preventDefault());
             
-            // -------------------- دعم اللمس --------------------
+            // اللمس
             face.addEventListener('touchstart', (e) => {
                 isDragging = true;
                 const touch = e.touches[0];
@@ -471,7 +479,6 @@
                 previousMouseY = touch.clientY;
                 dragStartRotY = targetRotY;
                 dragStartRotX = targetRotX;
-                face.style.cursor = 'grabbing';
                 e.preventDefault();
             }, { passive: false });
             
@@ -481,11 +488,8 @@
                 const deltaX = touch.clientX - previousMouseX;
                 const deltaY = touch.clientY - previousMouseY;
                 
-                const sensitivityY = 0.5;
-                const sensitivityX = 0.4;
-                
-                let newRotY = dragStartRotY + deltaX * sensitivityY;
-                let newRotX = dragStartRotX - deltaY * sensitivityX;
+                let newRotY = dragStartRotY + deltaX * 0.5;
+                let newRotX = dragStartRotX - deltaY * 0.4;
                 
                 targetRotY = Math.max(-MAX_Y, Math.min(MAX_Y, newRotY));
                 targetRotX = Math.max(-MAX_X, Math.min(MAX_X, newRotX));
@@ -494,7 +498,6 @@
             
             window.addEventListener('touchend', () => {
                 isDragging = false;
-                face.style.cursor = 'grab';
             });
             
             face.style.cursor = 'grab';
