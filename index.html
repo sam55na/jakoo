@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>وجه 3D تفاعلي - بيضوي مع صورة</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(145deg, #1a1e2b 0%, #2d3348 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+            padding: 20px;
+        }
+
+        .scene {
+            perspective: 1200px;
+            perspective-origin: 50% 50%;
+            width: 100%;
+            max-width: 700px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .face-container {
+            position: relative;
+            width: 340px;
+            height: 440px;
+            transform-style: preserve-3d;
+            transition: transform 0.08s ease-out;
+            cursor: grab;
+            will-change: transform;
+            filter: drop-shadow(0 25px 40px rgba(0, 0, 0, 0.6));
+        }
+
+        .face-container:active {
+            cursor: grabbing;
+        }
+
+        /* الشكل البيضوي الأساسي (الوجه) */
+        .face-oval {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50% / 60% 60% 40% 40%;
+            /* شكل بيضوي أكثر شبهاً بالوجه: عريض من الأعلى ويضيق من الأسفل قليلاً */
+            border-radius: 50% 50% 45% 45% / 55% 55% 45% 45%;
+            background: radial-gradient(circle at 30% 30%, #f5e6d3, #d9c2a7);
+            box-shadow: 
+                inset 0 20px 30px rgba(255, 255, 255, 0.6),
+                inset 0 -20px 30px rgba(0, 0, 0, 0.2),
+                0 30px 50px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            transform-style: preserve-3d;
+            /* إضافة طبقة خفيفة من العمق */
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        /* الصورة داخل الوجه (لتعطي مظهر 3D حقيقي) */
+        .face-image {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: inherit;
+            opacity: 0.95;
+            mix-blend-mode: normal;
+            filter: contrast(1.08) brightness(1.02) saturate(1.1);
+            display: block;
+            pointer-events: none;
+            /* جعل الصورة تتناسب مع الشكل البيضوي */
+            clip-path: ellipse(50% 60% at 50% 45%);
+            /* ظل داخلي لإبراز العمق */
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.3);
+        }
+
+        /* طبقة إضاءة علوية لتعزيز الإحساس بالثلاثي الأبعاد */
+        .face-light {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: inherit;
+            background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.1) 50%, transparent 80%);
+            pointer-events: none;
+            mix-blend-mode: overlay;
+            clip-path: ellipse(50% 60% at 50% 45%);
+        }
+
+        /* طبقة ظل سفلية للعمق */
+        .face-shadow {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: inherit;
+            background: radial-gradient(circle at 70% 80%, rgba(0, 0, 0, 0.3) 0%, transparent 70%);
+            pointer-events: none;
+            mix-blend-mode: multiply;
+            clip-path: ellipse(50% 60% at 50% 45%);
+        }
+
+        /* أنف صغير بارز (اختياري) لزيادة الواقعية - يمكن إخفاؤه */
+        .nose {
+            position: absolute;
+            top: 46%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 28px;
+            height: 40px;
+            background: radial-gradient(circle at 30% 30%, #e6cdb5, #bc9b7a);
+            border-radius: 50% 50% 40% 40% / 60% 60% 40% 40%;
+            box-shadow: inset -3px -5px 8px rgba(0,0,0,0.2), inset 5px 5px 12px rgba(255,255,255,0.5);
+            opacity: 0.4;
+            pointer-events: none;
+            z-index: 5;
+            filter: blur(0.6px);
+        }
+
+        /* أزرار التحكم بالميلان */
+        .controls {
+            margin-top: 40px;
+            display: flex;
+            gap: 18px;
+            flex-wrap: wrap;
+            justify-content: center;
+            background: rgba(20, 24, 33, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 14px 28px;
+            border-radius: 60px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+        }
+
+        .controls button {
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            color: #eaeef5;
+            font-size: 1.1rem;
+            font-weight: 500;
+            padding: 10px 26px;
+            border-radius: 40px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 0.5px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .controls button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.02);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .controls button:active {
+            transform: scale(0.98);
+        }
+
+        .controls button i {
+            font-style: normal;
+            font-size: 1.3rem;
+        }
+
+        /* شريط تعليمات صغير */
+        .hint {
+            margin-top: 22px;
+            color: #b0b8c5;
+            font-size: 0.9rem;
+            text-align: center;
+            letter-spacing: 0.3px;
+            background: rgba(0,0,0,0.3);
+            padding: 8px 20px;
+            border-radius: 40px;
+            backdrop-filter: blur(5px);
+        }
+
+        /* تأثير دوران ناعم */
+        .face-container {
+            transition: transform 0.12s cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
+        /* صورة افتراضية للوجه - يمكنك استبدالها بأي صورة تريدها */
+        /* الصورة أدناه هي صورة وجه افتراضية عالية الجودة من مصدر مفتوح */
+        /* ملاحظة: يمكنك تغيير مسار الصورة في وسم img أدناه */
+    </style>
+</head>
+<body>
+    <div class="scene">
+        <div class="face-container" id="faceContainer">
+            <div class="face-oval">
+                <!-- صورة الوجه - قم بتغيير src إلى صورة وجه حقيقية تريدها -->
+                <!-- هذه صورة وجه افتراضية جميلة، يمكنك استبدالها بأي صورة -->
+                <img 
+                    class="face-image" 
+                    src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80&ixlib=rb-4.0.3"
+                    alt="وجه 3D"
+                    crossorigin="anonymous"
+                >
+                <!-- طبقات الإضاءة والظل لتعزيز العمق -->
+                <div class="face-light"></div>
+                <div class="face-shadow"></div>
+                <!-- أنف صغير بارز (اختياري) -->
+                <div class="nose"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="leftBtn" title="تحريك لليسار"><i>←</i> يسار</button>
+        <button id="upBtn" title="تحريك للأعلى"><i>↑</i> أعلى</button>
+        <button id="rightBtn" title="تحريك لليمين"><i>→</i> يمين</button>
+        <button id="resetBtn" title="إعادة تعيين"><i>⟲</i> إعادة</button>
+    </div>
+    <div class="hint">🖱️ يمكنك أيضاً سحب الوجه بالفأرة أو اللمس لتحريكه بحرية</div>
+
+    <script>
+        (function() {
+            const face = document.getElementById('faceContainer');
+            
+            // القيم الحالية للدوران (بالدرجات)
+            let rotY = 0;   // دوران حول المحور الرأسي (يمين/يسار)
+            let rotX = 0;   // دوران حول المحور الأفقي (أعلى/أسفل)
+            
+            // القيم المستهدفة (لتحريك سلس)
+            let targetRotY = 0;
+            let targetRotX = 0;
+            
+            // حدود الدوران (لتبقى واقعية)
+            const MAX_Y = 28;   // أقصى دوران يمين/يسار
+            const MAX_X = 20;   // أقصى دوران أعلى/أسفل
+            
+            // سرعة التحديث (كلما زاد الرقم، كان الانتقال أسرع)
+            const SMOOTH_FACTOR = 0.12;
+            
+            // متغيرات السحب
+            let isDragging = false;
+            let previousMouseX = 0;
+            let previousMouseY = 0;
+            let dragStartRotY = 0;
+            let dragStartRotX = 0;
+            
+            // دالة تحديث التحويل
+            function updateTransform() {
+                // تطبيق الدوران مع الحفاظ على المنظور
+                face.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg)`;
+            }
+            
+            // حلقة الرسم للتحريك السلس
+            function animate() {
+                // الانتقال التدريجي نحو القيم المستهدفة
+                rotY += (targetRotY - rotY) * SMOOTH_FACTOR;
+                rotX += (targetRotX - rotX) * SMOOTH_FACTOR;
+                
+                // تقييد القيم ضمن الحدود (لأن السحب قد يتجاوزها)
+                rotY = Math.max(-MAX_Y, Math.min(MAX_Y, rotY));
+                rotX = Math.max(-MAX_X, Math.min(MAX_X, rotX));
+                
+                updateTransform();
+                requestAnimationFrame(animate);
+            }
+            
+            // بدء حلقة الرسم
+            animate();
+            
+            // -------------------- التحكم عبر الأزرار --------------------
+            document.getElementById('leftBtn').addEventListener('click', () => {
+                targetRotY = Math.max(-MAX_Y, targetRotY - 8);
+            });
+            
+            document.getElementById('rightBtn').addEventListener('click', () => {
+                targetRotY = Math.min(MAX_Y, targetRotY + 8);
+            });
+            
+            document.getElementById('upBtn').addEventListener('click', () => {
+                targetRotX = Math.min(MAX_X, targetRotX + 6);
+            });
+            
+            // (اختياري) إضافة زر للأسفل إذا أردت، لكن الأزرار المطلوبة فقط يمين/يسار/أعلى
+            // يمكنك إضافة زر أسفل إذا رغبت
+            
+            document.getElementById('resetBtn').addEventListener('click', () => {
+                targetRotY = 0;
+                targetRotX = 0;
+            });
+            
+            // -------------------- السحب بالفأرة (لتحريك حر) --------------------
+            face.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMouseX = e.clientX;
+                previousMouseY = e.clientY;
+                dragStartRotY = targetRotY;
+                dragStartRotX = targetRotX;
+                face.style.cursor = 'grabbing';
+                e.preventDefault();
+            });
+            
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const deltaX = e.clientX - previousMouseX;
+                const deltaY = e.clientY - previousMouseY;
+                
+                // تحويل حركة الماوس إلى دوران (معامل حساسية)
+                const sensitivityY = 0.5;
+                const sensitivityX = 0.4;
+                
+                // الدوران الأفقي (يمين/يسار) يعتمد على حركة الماوس الأفقية
+                let newRotY = dragStartRotY + deltaX * sensitivityY;
+                // الدوران الرأسي (أعلى/أسفل) يعتمد على حركة الماوس الرأسية (معكوسة لتبدو طبيعية)
+                let newRotX = dragStartRotX - deltaY * sensitivityX;
+                
+                // تقييد القيم
+                targetRotY = Math.max(-MAX_Y, Math.min(MAX_Y, newRotY));
+                targetRotX = Math.max(-MAX_X, Math.min(MAX_X, newRotX));
+            });
+            
+            window.addEventListener('mouseup', () => {
+                if (isDragging) {
+                    isDragging = false;
+                    face.style.cursor = 'grab';
+                }
+            });
+            
+            // منع السحب الافتراضي للصورة
+            face.addEventListener('dragstart', (e) => e.preventDefault());
+            
+            // -------------------- دعم اللمس (للأجهزة المحمولة) --------------------
+            face.addEventListener('touchstart', (e) => {
+                isDragging = true;
+                const touch = e.touches[0];
+                previousMouseX = touch.clientX;
+                previousMouseY = touch.clientY;
+                dragStartRotY = targetRotY;
+                dragStartRotX = targetRotX;
+                face.style.cursor = 'grabbing';
+                e.preventDefault();
+            }, { passive: false });
+            
+            window.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - previousMouseX;
+                const deltaY = touch.clientY - previousMouseY;
+                
+                const sensitivityY = 0.5;
+                const sensitivityX = 0.4;
+                
+                let newRotY = dragStartRotY + deltaX * sensitivityY;
+                let newRotX = dragStartRotX - deltaY * sensitivityX;
+                
+                targetRotY = Math.max(-MAX_Y, Math.min(MAX_Y, newRotY));
+                targetRotX = Math.max(-MAX_X, Math.min(MAX_X, newRotX));
+                e.preventDefault();
+            }, { passive: false });
+            
+            window.addEventListener('touchend', () => {
+                isDragging = false;
+                face.style.cursor = 'grab';
+            });
+            
+            // تعيين المؤشر المناسب
+            face.style.cursor = 'grab';
+            
+            // إضافة تأثير استجابة سريعة عند البدء
+            face.style.transition = 'transform 0.08s ease-out';
+        })();
+    </script>
+</body>
+</html>
