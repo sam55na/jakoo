@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>رأس 3D حقيقي</title>
+  <title>رأس 3D — صورة على الوجه فقط</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -69,7 +69,7 @@
       color: #b0b8c5;
       font-size: .85rem;
       text-align: center;
-      max-width: 500px;
+      max-width: 560px;
       line-height: 1.6;
     }
     .loading {
@@ -82,6 +82,21 @@
       font-size: 1rem;
       pointer-events: none;
       z-index: 10;
+    }
+    .debug {
+      margin-top: 10px;
+      padding: 10px 16px;
+      border-radius: 12px;
+      background: rgba(0,0,0,.35);
+      color: #a8b2c1;
+      font-family: monospace;
+      font-size: .75rem;
+      max-width: 560px;
+      max-height: 150px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      direction: ltr;
+      text-align: left;
     }
   </style>
 </head>
@@ -103,8 +118,10 @@
   </label>
 
   <p class="status" id="status">
-    💡 ارفع صورة وجهك (مربعة تقريباً - 1:1 مثالية) وسيتم تطبيقها على الرأس مباشرة.
+    💡 ارفع صورة وجهك (PNG شفافة مثالية) — ستُطبَّق على الوجه فقط.
   </p>
+
+  <div class="debug" id="debug" style="display:none"></div>
 
   <script type="importmap">
   {
@@ -122,6 +139,7 @@
     const sceneEl = document.getElementById('scene');
     const loadingEl = document.getElementById('loading');
     const status = document.getElementById('status');
+    const debugEl = document.getElementById('debug');
     const faceUpload = document.getElementById('faceUpload');
 
     // ============================================================
@@ -136,7 +154,6 @@
       0.1,
       100
     );
-    // ✅ الكاميرا بعيدة بما يكفي لرؤية الرأس كاملاً
     camera.position.set(0, 0, 3.5);
 
     const renderer = new THREE.WebGLRenderer({
@@ -150,9 +167,7 @@
     renderer.toneMappingExposure = 1.1;
     sceneEl.appendChild(renderer.domElement);
 
-    // ============================================================
     // إضاءة
-    // ============================================================
     scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.3));
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
@@ -171,20 +186,17 @@
     backLight.position.set(0, 1, -5);
     scene.add(backLight);
 
-    // ============================================================
-    // مجموعة الرأس
-    // ============================================================
     const headGroup = new THREE.Group();
     scene.add(headGroup);
 
     // ============================================================
-    // تحميل نموذج LeePerrySmith
+    // تحميل النموذج
     // ============================================================
     const MODEL_URL = 'https://threejs.org/examples/models/gltf/LeePerrySmith/LeePerrySmith.glb';
 
     let headModel = null;
-    let faceMeshes = [];      // ✅ نحفظ كل meshes الوجه
-    let originalMap = null;
+    let faceMesh = null;       // ✅ الـ mesh الذي يحمل الوجه فقط
+    let debugInfo = [];
 
     const loader = new GLTFLoader();
 
@@ -192,29 +204,27 @@
       MODEL_URL,
       (gltf) => {
         headModel = gltf.scene;
-
-        // ============================================================
-        // ✅ ضبط الحجم والموضع — الرأس يظهر بحجم مناسب
-        // ============================================================
-        // نموذج LeePerrySmith كبير جداً في الأصل، نُصغّره
         headModel.scale.setScalar(0.35);
         headModel.position.set(0, -0.1, 0);
 
-        // ✅ البحث عن جميع meshes الوجه وتخزينها
+        // ============================================================
+        // ✅ تحليل النموذج واختيار mesh الوجه فقط
+        // ============================================================
+        const allMeshes = [];
+
         headModel.traverse((child) => {
           if (child.isMesh && child.material) {
-            faceMeshes.push(child);
+            allMeshes.push(child);
+            debugInfo.push(`Mesh: "${child.name || 'unnamed'}"`);
+            const mats = Array.isArray(child.material) ? child.material : [child.material];
+            mats.forEach(m => {
+              debugInfo.push(`  Material: "${m.name || 'unnamed'}" | map: ${m.map ? '✓' : '✗'}`);
+            });
 
             const materials = Array.isArray(child.material)
               ? child.material
               : [child.material];
-
             materials.forEach((mat) => {
-              // حفظ النقش الأصلي لأول مرة
-              if (mat.map && !originalMap) {
-                originalMap = mat.map;
-              }
-              // ضبط المظهر
               mat.roughness = 0.78;
               mat.metalness = 0.0;
               mat.needsUpdate = true;
@@ -222,12 +232,23 @@
           }
         });
 
-        headGroup.add(headModel);
+        // ✅ اختيار mesh الوجه — الأول الذي يحمل خريطة (map)
+        // أو الأول في القائمة إن لم يوجد
+        faceMesh = allMeshes.find(m => {
+          const mats = Array.isArray(m.material) ? m.material : [m.material];
+          return mats.some(mat => mat.map);
+        }) || allMeshes[0];
 
+        debugInfo.push(`\n→ اخترنا mesh الوجه: "${faceMesh?.name || 'unnamed'}"`);
+        console.log(debugInfo.join('\n'));
+
+        // عرض التفاصيل إذا أردت
+        // debugEl.style.display = 'block';
+        // debugEl.textContent = debugInfo.join('\n');
+
+        headGroup.add(headModel);
         loadingEl.style.display = 'none';
-        status.textContent = `✅ الرأس جاهز (${faceMeshes.length} mesh). ارفع صورة وجهك.`;
-        console.log('عدد meshes الوجه:', faceMeshes.length);
-        console.log('قائمة المواد:', faceMeshes.map(m => m.material.name || 'unnamed'));
+        status.textContent = `✅ الرأس جاهز. mesh الوجه: "${faceMesh?.name || 'unnamed'}"`;
       },
       (progress) => {
         if (progress.total > 0) {
@@ -243,12 +264,16 @@
     );
 
     // ============================================================
-    // ✅ تطبيق صورة الوجه على كل مواد النموذج
-    // (بدون أي شرط على اسم المادة)
+    // ✅ تطبيق الصورة على mesh الوجه فقط
     // ============================================================
     faceUpload.addEventListener('change', (event) => {
       const file = event.target.files?.[0];
       if (!file) return;
+
+      if (!faceMesh) {
+        status.textContent = '⏳ انتظر تحميل النموذج أولاً.';
+        return;
+      }
 
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -258,26 +283,21 @@
           texture.colorSpace = THREE.SRGBColorSpace;
           texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
           texture.flipY = true;
-          texture.wrapS = THREE.RepeatWrapping;
-          texture.wrapT = THREE.RepeatWrapping;
+          texture.wrapS = THREE.ClampToEdgeWrapping;
+          texture.wrapT = THREE.ClampToEdgeWrapping;
           texture.needsUpdate = true;
 
-          // ✅ تطبيق الصورة على كل mesh موجود
-          if (faceMeshes.length > 0) {
-            faceMeshes.forEach((mesh) => {
-              const materials = Array.isArray(mesh.material)
-                ? mesh.material
-                : [mesh.material];
-              materials.forEach((mat) => {
-                mat.map = texture;
-                mat.needsUpdate = true;
-              });
-            });
+          // ✅ تطبيق الصورة على mesh الوجه فقط
+          const materials = Array.isArray(faceMesh.material)
+            ? faceMesh.material
+            : [faceMesh.material];
 
-            status.textContent = `✅ تم تطبيق صورتك على ${faceMeshes.length} سطح. اسحب لتدويره.`;
-          } else {
-            status.textContent = '⚠️ لم يتم العثور على meshes.';
-          }
+          materials.forEach((mat) => {
+            mat.map = texture;
+            mat.needsUpdate = true;
+          });
+
+          status.textContent = `✅ تم تطبيق صورتك على الوجه فقط (${faceMesh.name || 'unnamed'}).`;
         };
         img.onerror = () => {
           status.textContent = '❌ تعذر قراءة الصورة.';
@@ -288,7 +308,7 @@
     });
 
     // ============================================================
-    // دوران سلس
+    // دوران
     // ============================================================
     let isDragging = false;
     let prevX = 0, prevY = 0;
