@@ -207,28 +207,71 @@
       ctx.drawImage(image, sx, sy, sw, sh, x, y, width, height);
     }
 
+    function sampleBackColor(image) {
+      try {
+        const sample = document.createElement('canvas');
+        sample.width = 64; sample.height = 64;
+        const ctx = sample.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(image, 0, 0, 64, 64);
+        const pixels = ctx.getImageData(20, 1, 24, 15).data;
+        let r = 0, g = 0, b = 0, count = 0;
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (pixels[i + 3] < 20) continue;
+          r += pixels[i]; g += pixels[i + 1]; b += pixels[i + 2]; count++;
+        }
+        if (!count) return '#473b37';
+        return `rgb(${Math.round(r/count)},${Math.round(g/count)},${Math.round(b/count)})`;
+      } catch {
+        return '#473b37';
+      }
+    }
+
     function paintHeadTexture() {
-      const base = skinCtx.createLinearGradient(0, 0, 0, TEX_H);
-      base.addColorStop(0, '#d4ae91');
-      base.addColorStop(.5, '#c79a7d');
-      base.addColorStop(1, '#a97d64');
-      skinCtx.fillStyle = base;
+      const backTone = currentPhoto ? sampleBackColor(currentPhoto) : '#473b37';
+      skinCtx.fillStyle = backTone;
       skinCtx.fillRect(0, 0, TEX_W, TEX_H);
-      // Softly blend a portrait into the front-facing UV region of the head.
+      const shade = skinCtx.createLinearGradient(0, 0, 0, TEX_H);
+      shade.addColorStop(0, 'rgba(0,0,0,.15)');
+      shade.addColorStop(.48, 'rgba(255,255,255,.04)');
+      shade.addColorStop(1, 'rgba(0,0,0,.10)');
+      skinCtx.fillStyle = shade;
+      skinCtx.fillRect(0, 0, TEX_W, TEX_H);
+
       if (currentPhoto) {
-        const layer = document.createElement('canvas');
-        layer.width = TEX_W; layer.height = TEX_H;
-        const ctx = layer.getContext('2d');
-        const x = TEX_W * .315, y = TEX_H * .115, w = TEX_W * .37, h = TEX_H * .79;
-        drawCover(ctx, currentPhoto, x, y, w, h);
-        ctx.globalCompositeOperation = 'destination-in';
-        const fade = ctx.createRadialGradient(TEX_W * .5, TEX_H * .5, TEX_H * .19, TEX_W * .5, TEX_H * .5, TEX_H * .43);
-        fade.addColorStop(0, 'rgba(255,255,255,1)');
-        fade.addColorStop(.72, 'rgba(255,255,255,.98)');
-        fade.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = fade;
-        ctx.fillRect(x, y, w, h);
-        skinCtx.drawImage(layer, 0, 0);
+        // Map the complete portrait from crown to chin over the entire front of the head.
+        // Its edge pixels continue around the temples; there is no exposed skin-colored rim.
+        const frontX = TEX_W * .3125;
+        const frontW = TEX_W * .375;
+        const sideW = TEX_W * .0625;
+        const imageLayer = document.createElement('canvas');
+        imageLayer.width = TEX_W; imageLayer.height = TEX_H;
+        const imageCtx = imageLayer.getContext('2d');
+        drawCover(imageCtx, currentPhoto, frontX, 0, frontW, TEX_H);
+        skinCtx.drawImage(imageLayer, frontX, 0, frontW, TEX_H, frontX, 0, frontW, TEX_H);
+
+        // Continue the portrait's temple/hair-edge tones onto both sides, fading into a
+        // tone sampled from the upper portrait so the back of the skull stays coherent.
+        for (const side of ['left', 'right']) {
+          const left = side === 'left';
+          const band = document.createElement('canvas');
+          band.width = Math.ceil(sideW); band.height = TEX_H;
+          const bandCtx = band.getContext('2d');
+          const srcX = left ? frontX : frontX + frontW - 1;
+          bandCtx.drawImage(imageLayer, srcX, 0, 1, TEX_H, 0, 0, band.width, TEX_H);
+          const fade = bandCtx.createLinearGradient(0, 0, band.width, 0);
+          if (left) {
+            fade.addColorStop(0, 'rgba(255,255,255,0)');
+            fade.addColorStop(1, 'rgba(255,255,255,1)');
+          } else {
+            fade.addColorStop(0, 'rgba(255,255,255,1)');
+            fade.addColorStop(1, 'rgba(255,255,255,0)');
+          }
+          bandCtx.globalCompositeOperation = 'destination-in';
+          bandCtx.fillStyle = fade;
+          bandCtx.fillRect(0, 0, band.width, TEX_H);
+          const destX = left ? frontX - sideW : frontX + frontW;
+          skinCtx.drawImage(band, destX, 0, sideW, TEX_H);
+        }
       }
       if (headTexture) headTexture.needsUpdate = true;
     }
@@ -242,15 +285,15 @@
     function makeHeadGeometry() {
       const around = 192, vertical = 160;
       const positions = [], uvs = [], indices = [];
-      const rx = .91, rz = .76, halfHeight = 1.36;
+      const rx = .88, rz = .73, halfHeight = 1.38;
       for (let j = 0; j <= vertical; j++) {
         const v = j / vertical;
         const y = (v - .5) * 2 * halfHeight;
         const yn = y / halfHeight;
-        const ring = Math.pow(Math.max(0, 1 - yn * yn), .62);
+        const ring = Math.pow(Math.max(0, 1 - yn * yn), .56);
         const lowerJaw = 1 - smoothstep(-1.12, -.12, y);
         const jawWidth = 1 - .24 * lowerJaw;
-        const cheekFullness = 1 + .035 * Math.exp(-Math.pow((y + .12) / .36, 2));
+        const cheekFullness = 1 + .025 * Math.exp(-Math.pow((y + .10) / .38, 2));
         for (let i = 0; i <= around; i++) {
           const u = i / around;
           const theta = (u - .5) * Math.PI * 2;
@@ -262,15 +305,15 @@
             const g = (cx, cy, wx, wy) => Math.exp(-Math.pow((x-cx)/wx, 2) - Math.pow((y-cy)/wy, 2));
             let relief = 0;
             // Nose bridge and tip; cheek, brow, chin, and subtle eye-socket relief.
-            relief += .115 * g(0, .02, .115, .42);
-            relief += .16 * g(0, -.23, .18, .19);
-            relief += .045 * (g(-.115, -.30, .055, .045) + g(.115, -.30, .055, .045));
-            relief += .055 * (g(-.28, .47, .22, .09) + g(.28, .47, .22, .09));
-            relief -= .045 * (g(-.28, .31, .19, .105) + g(.28, .31, .19, .105));
-            relief += .075 * (g(-.43, -.05, .23, .20) + g(.43, -.05, .23, .20));
-            relief += .035 * g(0, -.48, .27, .11);
-            relief += .065 * g(0, -.91, .30, .18);
-            relief += .018 * (g(-.105, -.42, .08, .035) + g(.105, -.42, .08, .035));
+            // Keep facial relief shallow so the uploaded portrait is not warped.
+            relief += .035 * g(0, .02, .11, .40);
+            relief += .055 * g(0, -.23, .16, .18);
+            relief += .012 * (g(-.115, -.30, .055, .045) + g(.115, -.30, .055, .045));
+            relief += .018 * (g(-.28, .47, .22, .09) + g(.28, .47, .22, .09));
+            relief -= .012 * (g(-.28, .31, .19, .105) + g(.28, .31, .19, .105));
+            relief += .028 * (g(-.43, -.05, .23, .20) + g(.43, -.05, .23, .20));
+            relief += .012 * g(0, -.48, .27, .11);
+            relief += .028 * g(0, -.91, .30, .18);
             z += front * relief;
           }
           positions.push(x, y, z);
@@ -308,11 +351,11 @@
     for (const side of [-1, 1]) {
       const ear = new THREE.Mesh(earGeo, earMaterial);
       ear.scale.set(.19, .31, .115);
-      ear.position.set(side * .85, .08, -.005);
+      ear.position.set(side * .89, .08, -.005);
       headGroup.add(ear);
       const concha = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20), earInnerMaterial);
       concha.scale.set(.075, .17, .025);
-      concha.position.set(side * .91, .08, .094);
+      concha.position.set(side * .95, .08, .094);
       headGroup.add(concha);
     }
     const neck = new THREE.Mesh(
