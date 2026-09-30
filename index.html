@@ -1,9 +1,19 @@
+الرقبة أُزيلت والمجسم صار رأساً فقط ينتهي عند الذقن. لم أجرّب الكود في متصفح، وفحصت صياغته فقط.
+
+- **الرقبة:** القاع مغلق بقطع ناقص عند الفك، وحذفت تلاشي الرقبة.
+- **حذفت الزوائد:** الإضاءة البيئية والدوال غير المستعملة.
+- **إصلاح صغير:** تصفير المنزلقات صار قبل تطبيق الصورة.
+- **الحفظ:** الملف محفوظ باسم `head3d.html`، والكود الكامل هنا:
+
+```html
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>رأس 3D — صورة على الوجه فقط</title>
+  <meta name="theme-color" content="#1a1e2b">
+  <title>رأس إنسان ثلاثي الأبعاد</title>
+
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -13,378 +23,818 @@
       align-items: center;
       justify-content: center;
       padding: 20px;
+      overflow-x: hidden;
       color: #eaeef5;
       font-family: "Segoe UI", Tahoma, Arial, sans-serif;
       background: radial-gradient(ellipse at 50% 36%, #343b51 0%, #252b3b 46%, #171b26 100%);
     }
     .scene {
-      width: min(500px, 90vw);
-      height: min(600px, 70vh);
-      cursor: grab;
-      touch-action: none;
-      position: relative;
-      filter: drop-shadow(0 30px 40px rgba(0,0,0,.5));
+      width: 100%;
+      max-width: 700px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .scene:active { cursor: grabbing; }
-    .scene canvas { display: block; width: 100% !important; height: 100% !important; }
+    .face-container {
+      position: relative;
+      width: min(420px, 88vw);
+      height: min(520px, 64vh);
+      min-height: 360px;
+      touch-action: none;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .face-container:active { cursor: grabbing; }
+    .face-container canvas { display: block; width: 100%; height: 100%; outline: none; }
+
     .controls {
-      margin-top: 20px;
+      margin-top: 16px;
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
       justify-content: center;
+      gap: 12px;
       padding: 13px 20px;
+      border: 1px solid rgba(255,255,255,.1);
       border-radius: 60px;
       background: rgba(20,24,33,.72);
-      border: 1px solid rgba(255,255,255,.1);
+      box-shadow: 0 15px 35px rgba(0,0,0,.36);
       backdrop-filter: blur(10px);
     }
     .controls button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       padding: 10px 20px;
       border: 1px solid rgba(255,255,255,.15);
       border-radius: 40px;
       color: #eaeef5;
       background: rgba(255,255,255,.08);
+      box-shadow: 0 4px 10px rgba(0,0,0,.22);
       font-family: inherit;
       font-size: 1rem;
+      font-weight: 500;
       cursor: pointer;
-      transition: all .2s;
+      transition: background .2s, transform .2s, border-color .2s;
     }
-    .controls button:hover { background: rgba(255,255,255,.18); transform: scale(1.03); }
-    .upload {
-      margin-top: 16px;
-      padding: 12px 26px;
+    .controls button:hover { background: rgba(255,255,255,.18); transform: scale(1.03); border-color: rgba(255,255,255,.3); }
+    .controls button:active { transform: scale(.98); }
+    .controls button i { font-style: normal; font-size: 1.2rem; }
+
+    .upload-section {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      padding: 12px 20px;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 40px;
+      background: rgba(20,24,33,.72);
+      box-shadow: 0 10px 25px rgba(0,0,0,.3);
+      backdrop-filter: blur(10px);
+    }
+    .upload-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border: 1px solid rgba(255,255,255,.2);
       border-radius: 40px;
       color: white;
       background: linear-gradient(135deg,#6a5acd,#8a7bdd);
+      box-shadow: 0 4px 15px rgba(106,90,205,.38);
+      font-size: .9rem;
       font-weight: 600;
       cursor: pointer;
-      border: 1px solid rgba(255,255,255,.2);
-      box-shadow: 0 4px 15px rgba(106,90,205,.4);
+      transition: transform .2s, box-shadow .2s;
     }
-    .upload:hover { transform: translateY(-2px); }
-    .upload input { display: none; }
-    .status {
+    .upload-label:hover { transform: translateY(-2px); }
+    .upload-label input { display: none; }
+    .upload-status { font-size: .75rem; color: #9ba3b0; min-width: 60px; text-align: center; }
+    .upload-status.ready { color: #7ed4a8; }
+
+    .fit-section {
       margin-top: 12px;
-      color: #b0b8c5;
-      font-size: .85rem;
-      text-align: center;
-      max-width: 560px;
-      line-height: 1.6;
-    }
-    .loading {
-      position: absolute;
-      inset: 0;
       display: flex;
+      flex-wrap: wrap;
+      gap: 6px 18px;
       align-items: center;
       justify-content: center;
-      color: #eaeef5;
-      font-size: 1rem;
-      pointer-events: none;
-      z-index: 10;
+      padding: 10px 20px;
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 30px;
+      background: rgba(20,24,33,.55);
+      font-size: .8rem;
+      color: #b9c0cc;
+      transition: opacity .3s;
     }
-    .debug {
-      margin-top: 10px;
-      padding: 10px 16px;
-      border-radius: 12px;
-      background: rgba(0,0,0,.35);
-      color: #a8b2c1;
-      font-family: monospace;
-      font-size: .75rem;
-      max-width: 560px;
-      max-height: 150px;
-      overflow-y: auto;
-      white-space: pre-wrap;
-      direction: ltr;
-      text-align: left;
+    .fit-section.disabled { opacity: .4; pointer-events: none; }
+    .fit-section label { display: inline-flex; align-items: center; gap: 8px; }
+    .fit-section input[type=range] { direction: ltr; width: 110px; accent-color: #8a7bdd; }
+
+    .hint {
+      max-width: min(580px, 92vw);
+      margin-top: 12px;
+      padding: 9px 17px;
+      border-radius: 30px;
+      color: #b0b8c5;
+      background: rgba(0,0,0,.26);
+      font-size: .82rem;
+      line-height: 1.6;
+      text-align: center;
+    }
+    .status { min-height: 1.3em; margin-top: 6px; color: #d4d9e2; font-size: .8rem; text-align: center; }
+
+    @media (max-width: 480px) {
+      body { padding: 12px; }
+      .face-container { height: min(470px, 59vh); min-height: 330px; }
+      .controls { gap: 8px; padding: 10px 12px; }
+      .controls button { padding: 9px 13px; font-size: .9rem; }
+      .upload-label { padding: 9px 15px; font-size: .82rem; }
+      .fit-section input[type=range] { width: 90px; }
     }
   </style>
 </head>
 <body>
-  <div class="scene" id="scene">
-    <div class="loading" id="loading">جاري تحميل نموذج الرأس...</div>
-  </div>
+  <main class="scene" aria-label="عارض رأس إنسان ثلاثي الأبعاد">
+    <div class="face-container" id="faceContainer" role="img" aria-label="رأس ثلاثي الأبعاد قابل للدوران"></div>
+  </main>
 
-  <nav class="controls">
-    <button id="leftBtn">← يسار</button>
-    <button id="upBtn">↑ أعلى</button>
-    <button id="rightBtn">→ يمين</button>
-    <button id="resetBtn">⟲ إعادة</button>
+  <nav class="controls" aria-label="أدوات تدوير الرأس">
+    <button id="leftBtn" title="تحريك لليسار"><i>←</i> يسار</button>
+    <button id="upBtn" title="إمالة الرأس"><i>↑</i> أعلى</button>
+    <button id="rightBtn" title="تحريك لليمين"><i>→</i> يمين</button>
+    <button id="resetBtn" title="إعادة تعيين"><i>⟲</i> إعادة</button>
   </nav>
 
-  <label class="upload" for="faceUpload">
-    📷 اختر صورة الوجه
-    <input type="file" id="faceUpload" accept="image/*">
-  </label>
+  <section class="upload-section" aria-label="رفع الصورة">
+    <label class="upload-label" for="faceUpload">
+      <span aria-hidden="true">🙂</span> صورة الوجه الأمامي
+      <input type="file" id="faceUpload" accept="image/*">
+    </label>
+    <span class="upload-status" id="faceStatus">لم تُرفع</span>
+  </section>
 
-  <p class="status" id="status">
-    💡 ارفع صورة وجهك (PNG شفافة مثالية) — ستُطبَّق على الوجه فقط.
+  <section class="fit-section disabled" id="fitSection" aria-label="ضبط المجسم الخلفي خلف الصورة">
+    <label>حجم المجسم <input type="range" id="scaleRange" min="0.7" max="1.4" step="0.01" value="1"></label>
+    <label>ارتفاعه <input type="range" id="yRange" min="-0.4" max="0.4" step="0.01" value="0"></label>
+    <label>موضعه الأفقي <input type="range" id="xRange" min="-0.3" max="0.3" step="0.01" value="0"></label>
+  </section>
+
+  <p class="hint">
+    💡 ترفع صورة الوجه فتُعرض كما هي دون أي تعديل، أكبر من المجسم قليلاً (والشعر المتدلي يبقى بشكله).
+    أما الجانبان والخلف فيأخذان لون الشعر والجلد من الصورة تلقائياً. يفضّل PNG مفرغة.
   </p>
-
-  <div class="debug" id="debug" style="display:none"></div>
-
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
-    }
-  }
-  </script>
+  <p class="status" id="status" aria-live="polite"></p>
 
   <script type="module">
-    import * as THREE from 'three';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js';
 
-    const sceneEl = document.getElementById('scene');
-    const loadingEl = document.getElementById('loading');
-    const status = document.getElementById('status');
-    const debugEl = document.getElementById('debug');
-    const faceUpload = document.getElementById('faceUpload');
+    /* ==================================================================
+     * 1) الإعدادات
+     * ================================================================== */
+    const CONFIG = {
+      // أبعاد المجسم (وحدات عالمية، الرأس بارتفاع ≈ 1.9 وينتهي عند الذقن)
+      head: { top: 1.0, bottom: -0.9, capY: -0.7, domeY: 0.15, around: 240, capRows: 24, lowRows: 110, domeRows: 40 },
+      pivotY: -0.5,                       // مركز الدوران (قاعدة الجمجمة)
+      cameraY: 0.05,
+      rotation: { maxY: 38, maxX: 24, smooth: 0.12, dragY: 0.48, dragX: 0.38, stepY: 8, stepX: 6 },
+      photo: { contentWidth: 1.6, centerY: 0.10, headFill: 0.86, topGap: 0.06 },  // الصورة تُعرض أكبر من المجسم
+      texMax: 2048,                       // أكبر بُعد لمعالجة الصورة
+      smearGrid: 56                       // دقة خريطة الألوان الممتدة
+    };
 
-    // ============================================================
-    // المشهد
-    // ============================================================
+    /* ==================================================================
+     * 2) أدوات رياضية
+     * ================================================================== */
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const smooth = (e0, e1, x) => {
+      const t = clamp((x - e0) / (e1 - e0), 0, 1);
+      return t * t * (3 - 2 * t);
+    };
+
+    // استيفاء أحادي الاتجاه (PCHIP) لمنحنيات الملف الشخصي — يمنع التموجات
+    function makeProfile(points) {
+      const n = points.length;
+      const xs = points.map(p => p[0]);
+      const ys = points.map(p => p[1]);
+      const h = [], d = [];
+      for (let i = 0; i < n - 1; i++) { h[i] = xs[i + 1] - xs[i]; d[i] = (ys[i + 1] - ys[i]) / h[i]; }
+      const m = new Array(n).fill(0);
+      for (let i = 1; i < n - 1; i++) {
+        if (d[i - 1] * d[i] > 0) {
+          const w1 = 2 * h[i] + h[i - 1], w2 = h[i] + 2 * h[i - 1];
+          m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i]);
+        }
+      }
+      return (x) => {
+        if (x <= xs[0]) return ys[0];
+        if (x >= xs[n - 1]) return ys[n - 1];
+        let k = 0;
+        while (x > xs[k + 1]) k++;
+        const t = (x - xs[k]) / h[k], t2 = t * t, t3 = t2 * t;
+        return (2 * t3 - 3 * t2 + 1) * ys[k] + (t3 - 2 * t2 + t) * h[k] * m[k] +
+               (-2 * t3 + 3 * t2) * ys[k + 1] + (t3 - t2) * h[k] * m[k + 1];
+      };
+    }
+
+    /* ==================================================================
+     * 3) المشهد والإضاءة
+     * ================================================================== */
+    const container = document.getElementById('faceContainer');
+    const statusEl = document.getElementById('status');
+
     const scene = new THREE.Scene();
-    scene.background = null;
-
-    const camera = new THREE.PerspectiveCamera(
-      30,
-      sceneEl.clientWidth / sceneEl.clientHeight,
-      0.1,
-      100
-    );
-    camera.position.set(0, 0, 3.5);
-
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      preserveDrawingBuffer: true
-    });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
-    sceneEl.appendChild(renderer.domElement);
+    renderer.toneMappingExposure = 1.0;
+    container.appendChild(renderer.domElement);
 
-    // إضاءة
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.3));
+    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
+    camera.position.set(0, CONFIG.cameraY, 4.9);
+    camera.lookAt(0, CONFIG.cameraY, 0);
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
-    keyLight.position.set(-2, 3, 4);
+    scene.add(new THREE.HemisphereLight(0xe5edff, 0x453326, 0.75));
+    const keyLight = new THREE.DirectionalLight(0xfff0e0, 2.0);
+    keyLight.position.set(-3.0, 3.5, 5.0);
     scene.add(keyLight);
-
-    const fillLight = new THREE.DirectionalLight(0xccddff, 1.0);
-    fillLight.position.set(3, 1, 3);
+    const fillLight = new THREE.DirectionalLight(0xc6d5ff, 0.7);
+    fillLight.position.set(4.0, 1.0, 3.0);
     scene.add(fillLight);
-
-    const rimLight = new THREE.DirectionalLight(0xffd4a8, 1.5);
-    rimLight.position.set(1, 2, -3);
+    const rimLight = new THREE.DirectionalLight(0xffd8b8, 1.6);
+    rimLight.position.set(2.0, 3.0, -3.0);
     scene.add(rimLight);
 
-    const backLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    backLight.position.set(0, 1, -5);
-    scene.add(backLight);
+    /* ==================================================================
+     * 4) هندسة الرأس — سطح واحد مستمر (جمجمة + فك، بلا رقبة)
+     *    لا يوجد UV ولا طبقات، لذلك لا توجد أي حواف أو خطوط التحام.
+     * ================================================================== */
+    const HeadGeometry = (() => {
+      const { top, bottom, capY, domeY, around, capRows, lowRows, domeRows } = CONFIG.head;
 
-    const headGroup = new THREE.Group();
-    scene.add(headGroup);
+      // مقاطع جانبية: [ارتفاع y, نصف العرض / عمق الأمام / عمق الخلف]
+      const profW = makeProfile([[-0.70,0.39],[-0.62,0.47],[-0.42,0.60],[-0.2,0.665],[0.0,0.685],[0.15,0.68]]);
+      const profF = makeProfile([[-0.70,0.655],[-0.66,0.66],[-0.45,0.655],[-0.25,0.66],[0.0,0.68],[0.15,0.70]]);
+      const profB = makeProfile([[-0.70,0.47],[-0.5,0.61],[-0.3,0.76],[-0.1,0.84],[0.05,0.865],[0.15,0.865]]);
+      const W0 = profW(domeY), F0 = profF(domeY), B0 = profB(domeY);
+      const Wc = profW(capY), Fc = profF(capY), Bc = profB(capY);
 
-    // ============================================================
-    // تحميل النموذج
-    // ============================================================
-    const MODEL_URL = 'https://threejs.org/examples/models/gltf/LeePerrySmith/LeePerrySmith.glb';
-
-    let headModel = null;
-    let faceMesh = null;       // ✅ الـ mesh الذي يحمل الوجه فقط
-    let debugInfo = [];
-
-    const loader = new GLTFLoader();
-
-    loader.load(
-      MODEL_URL,
-      (gltf) => {
-        headModel = gltf.scene;
-        headModel.scale.setScalar(0.35);
-        headModel.position.set(0, -0.1, 0);
-
-        // ============================================================
-        // ✅ تحليل النموذج واختيار mesh الوجه فقط
-        // ============================================================
-        const allMeshes = [];
-
-        headModel.traverse((child) => {
-          if (child.isMesh && child.material) {
-            allMeshes.push(child);
-            debugInfo.push(`Mesh: "${child.name || 'unnamed'}"`);
-            const mats = Array.isArray(child.material) ? child.material : [child.material];
-            mats.forEach(m => {
-              debugInfo.push(`  Material: "${m.name || 'unnamed'}" | map: ${m.map ? '✓' : '✗'}`);
-            });
-
-            const materials = Array.isArray(child.material)
-              ? child.material
-              : [child.material];
-            materials.forEach((mat) => {
-              mat.roughness = 0.78;
-              mat.metalness = 0.0;
-              mat.needsUpdate = true;
-            });
-          }
-        });
-
-        // ✅ اختيار mesh الوجه — الأول الذي يحمل خريطة (map)
-        // أو الأول في القائمة إن لم يوجد
-        faceMesh = allMeshes.find(m => {
-          const mats = Array.isArray(m.material) ? m.material : [m.material];
-          return mats.some(mat => mat.map);
-        }) || allMeshes[0];
-
-        debugInfo.push(`\n→ اخترنا mesh الوجه: "${faceMesh?.name || 'unnamed'}"`);
-        console.log(debugInfo.join('\n'));
-
-        // عرض التفاصيل إذا أردت
-        // debugEl.style.display = 'block';
-        // debugEl.textContent = debugInfo.join('\n');
-
-        headGroup.add(headModel);
-        loadingEl.style.display = 'none';
-        status.textContent = `✅ الرأس جاهز. mesh الوجه: "${faceMesh?.name || 'unnamed'}"`;
-      },
-      (progress) => {
-        if (progress.total > 0) {
-          const percent = Math.round((progress.loaded / progress.total) * 100);
-          loadingEl.textContent = `جاري التحميل... ${percent}%`;
+      function ring(y) {
+        if (y >= domeY) {                       // قمة الجمجمة: قطع ناقص كامل
+          const t = (y - domeY) / (top - domeY);
+          const k = Math.sqrt(Math.max(0, 1 - t * t));
+          return { W: W0 * k, F: F0 * k, B: B0 * k };
         }
-      },
-      (error) => {
-        console.error(error);
-        loadingEl.textContent = 'تعذر تحميل النموذج.';
-        status.textContent = '❌ فشل تحميل النموذج.';
-      }
-    );
-
-    // ============================================================
-    // ✅ تطبيق الصورة على mesh الوجه فقط
-    // ============================================================
-    faceUpload.addEventListener('change', (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-
-      if (!faceMesh) {
-        status.textContent = '⏳ انتظر تحميل النموذج أولاً.';
-        return;
+        if (y < capY) {                         // قاع الفك: قطع ناقص مغلق (بلا رقبة)
+          const t = (capY - y) / (capY - bottom);
+          const k = Math.sqrt(Math.max(0, 1 - t * t));
+          return { W: Wc * k, F: Fc * k, B: Bc * k };
+        }
+        return { W: profW(y), F: profF(y), B: profB(y) };
       }
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const texture = new THREE.Texture(img);
-          texture.colorSpace = THREE.SRGBColorSpace;
-          texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-          texture.flipY = true;
-          texture.wrapS = THREE.ClampToEdgeWrapping;
-          texture.wrapT = THREE.ClampToEdgeWrapping;
-          texture.needsUpdate = true;
+      function build() {
+        // صفوف الارتفاع: القاع والقمة موزعان بزاوية (بلا قطب حاد) والوسط منتظم
+        const ys = [];
+        for (let j = 0; j <= capRows; j++) ys.push(capY - (capY - bottom) * Math.sin((1 - j / capRows) * Math.PI / 2));
+        for (let j = 1; j < lowRows; j++) ys.push(capY + (domeY - capY) * j / lowRows);
+        for (let j = 0; j <= domeRows; j++) ys.push(domeY + (top - domeY) * Math.sin((j / domeRows) * Math.PI / 2));
 
-          // ✅ تطبيق الصورة على mesh الوجه فقط
-          const materials = Array.isArray(faceMesh.material)
-            ? faceMesh.material
-            : [faceMesh.material];
+        const rows = ys.length, stride = around + 1;
+        const positions = new Float32Array(rows * stride * 3);
+        const indices = [];
+        let p = 0;
 
-          materials.forEach((mat) => {
-            mat.map = texture;
-            mat.needsUpdate = true;
-          });
+        for (let j = 0; j < rows; j++) {
+          const y = ys[j];
+          const { W, F, B } = ring(y);
+          const nF = 2.0 + 0.6 * smooth(-0.95, -0.7, y) * (1 - smooth(0.15, 0.8, y));  // مقدمة مسطحة قليلاً خلف الصورة
+          const nB = 2.0;
 
-          status.textContent = `✅ تم تطبيق صورتك على الوجه فقط (${faceMesh.name || 'unnamed'}).`;
-        };
-        img.onerror = () => {
-          status.textContent = '❌ تعذر قراءة الصورة.';
-        };
-        img.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    });
+          for (let i = 0; i <= around; i++) {
+            const th = (i / around - 0.5) * Math.PI * 2;
+            const s = Math.sin(th), c = Math.cos(th);
+            const n = c >= 0 ? nF : nB;
+            const e = 2 / n;
 
-    // ============================================================
-    // دوران
-    // ============================================================
-    let isDragging = false;
-    let prevX = 0, prevY = 0;
-    let rotY = 0, rotX = 0;
-    let targetRotY = 0, targetRotX = 0;
+            let x = W * Math.sign(s) * Math.pow(Math.abs(s), e);
+            let z = (c >= 0 ? F : B) * Math.sign(c) * Math.pow(Math.abs(c), e);
+            if (c < 0) z = -Math.abs(z);
 
-    const MAX_Y = 0.6, MAX_X = 0.35;
-    const SMOOTH = 0.12;
-    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+            positions[p++] = x; positions[p++] = y; positions[p++] = z;
 
-    sceneEl.addEventListener('pointerdown', (e) => {
-      isDragging = true;
-      prevX = e.clientX;
-      prevY = e.clientY;
-      sceneEl.setPointerCapture(e.pointerId);
-    });
+            if (j < rows - 1 && i < around) {
+              const a = j * stride + i, b = a + stride;
+              indices.push(a, a + 1, b, b, a + 1, b + 1);
+            }
+          }
+        }
 
-    sceneEl.addEventListener('pointermove', (e) => {
-      if (!isDragging) return;
-      const dx = e.clientX - prevX;
-      const dy = e.clientY - prevY;
-      targetRotY = clamp(targetRotY + dx * 0.008, -MAX_Y, MAX_Y);
-      targetRotX = clamp(targetRotX + dy * 0.006, -MAX_X, MAX_X);
-      prevX = e.clientX;
-      prevY = e.clientY;
-    });
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
 
-    const stopDrag = (e) => {
-      isDragging = false;
-      if (e && e.pointerId) {
-        try { sceneEl.releasePointerCapture(e.pointerId); } catch(_) {}
+        // إزالة خط الالتحام الخلفي: توحيد الأشعة عند أول وآخر عمود
+        const nrm = geo.attributes.normal;
+        for (let j = 0; j < rows; j++) {
+          const a = j * stride, b = a + around;
+          const nx = nrm.getX(a) + nrm.getX(b), ny = nrm.getY(a) + nrm.getY(b), nz = nrm.getZ(a) + nrm.getZ(b);
+          const l = Math.hypot(nx, ny, nz) || 1;
+          nrm.setXYZ(a, nx / l, ny / l, nz / l);
+          nrm.setXYZ(b, nx / l, ny / l, nz / l);
+        }
+        // القاع: شعاع للأسفل
+        for (let i = 0; i <= around; i++) nrm.setXYZ(i, 0, -1, 0);
+        // القمة: شعاع رأسي ثابت
+        const last = (rows - 1) * stride;
+        for (let i = 0; i <= around; i++) nrm.setXYZ(last + i, 0, 1, 0);
+        nrm.needsUpdate = true;
+
+        geo.computeBoundingSphere();
+        return geo;
       }
+
+      return { build };
+    })();
+
+    /* ==================================================================
+     * 5) مادة الجلد/الشعر — تولّد الجانبين والخلف من ألوان الصورة
+     *    (خريطة ألوان ممتدة + لوحة جلد/شعر محسوبة).
+     * ================================================================== */
+    function makeDummyTexture(hex) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 2;
+      const x = c.getContext('2d');
+      x.fillStyle = hex; x.fillRect(0, 0, 2, 2);
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    }
+    const srgb = (r, g, b) => new THREE.Color().setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
+
+    const U = {
+      uSmear:       { value: makeDummyTexture('#c8977c') },
+      uFrameSize:   { value: new THREE.Vector2(1, 1) },
+      uFrameCenter: { value: new THREE.Vector2(0, 0) },
+      uSkin:        { value: srgb(200, 151, 124) },
+      uHair:        { value: srgb(50, 38, 32) },
+      uHairAmt:     { value: 0 },
+      uBackHairY:   { value: -0.5 }
     };
-    sceneEl.addEventListener('pointerup', stopDrag);
-    sceneEl.addEventListener('pointercancel', stopDrag);
 
-    document.getElementById('leftBtn').addEventListener('click', () => {
-      targetRotY = clamp(targetRotY - 0.2, -MAX_Y, MAX_Y);
-    });
-    document.getElementById('rightBtn').addEventListener('click', () => {
-      targetRotY = clamp(targetRotY + 0.2, -MAX_Y, MAX_Y);
-    });
-    document.getElementById('upBtn').addEventListener('click', () => {
-      targetRotX = clamp(targetRotX - 0.15, -MAX_X, MAX_X);
-    });
-    document.getElementById('resetBtn').addEventListener('click', () => {
-      targetRotY = 0;
-      targetRotX = 0;
+    const skinMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      roughness: 0.58,
+      metalness: 0,
+      sheen: 0.6,
+      sheenRoughness: 0.55,
+      sheenColor: new THREE.Color(0xffd6c2),
+      side: THREE.FrontSide
     });
 
-    // ============================================================
-    // حلقة الرسم
-    // ============================================================
+    skinMaterial.onBeforeCompile = (shader) => {
+      Object.assign(shader.uniforms, U);
+
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vObjPos;\nvarying vec3 vObjNrm;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\nvObjPos = position;\nvObjNrm = normal;');
+
+      const fragHead = /* glsl */`
+        #include <common>
+        uniform sampler2D uSmear;
+        uniform vec2 uFrameSize;
+        uniform vec2 uFrameCenter;
+        uniform vec3 uSkin;
+        uniform vec3 uHair;
+        uniform float uHairAmt;
+        uniform float uBackHairY;
+        varying vec3 vObjPos;
+        varying vec3 vObjNrm;
+        float gHairness = 0.0;
+
+        float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+        float vn(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x),
+                     mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y);
+        }
+      `;
+
+      const mapChunk = /* glsl */`
+        {
+          vec3 P = vObjPos;
+          vec3 N = normalize(vObjNrm);
+
+          // ألوان الصورة الممتدة (مموّهة) — تظهر على الجانبين خلف الصورة الحقيقية
+          vec2 fuv = (P.xy - uFrameCenter) / uFrameSize + 0.5;
+          vec3 col = texture2D(uSmear, clamp(fuv, vec2(0.002), vec2(0.998))).rgb;
+
+          // الخلف: لوحة مولّدة (شعر فوق خط القفا، جلد تحته) بحد متموج ناعم
+          float backW = 1.0 - smoothstep(-0.80, -0.12, N.z);
+          float wob = (vn(P.xy * vec2(7.0, 5.0)) - 0.5) * 0.12;
+          float hb = uBackHairY + wob;
+          float hairBack = uHairAmt * smoothstep(hb - 0.07, hb + 0.07, P.y);
+          col = mix(col, mix(uSkin, uHair, hairBack), backW);
+
+          // أعلى الرأس
+          float topW = smoothstep(0.55, 0.92, N.y);
+          col = mix(col, mix(uSkin, uHair, uHairAmt), topW);
+
+          // خصلات الشعر ومسام الجلد
+          float dh = distance(col, uHair);
+          float ds = distance(col, uSkin);
+          gHairness = uHairAmt * smoothstep(-0.05, 0.05, ds - dh);
+          float st = vn(vec2(P.x * 90.0, P.y * 4.5 + vn(P.xy * vec2(12.0, 4.0)) * 2.5)) * 0.6
+                   + vn(vec2(P.x * 210.0, P.y * 9.0)) * 0.4;
+          col *= 1.0 + (st - 0.5) * 0.55 * gHairness;
+          float pore = vn(P.xy * 170.0 + P.zz * 95.0);
+          col *= 1.0 + (pore - 0.5) * 0.06 * (1.0 - gHairness);
+
+          // ظل خفيف أسفل الفك
+          col *= 1.0 - 0.32 * (1.0 - smoothstep(-0.85, -0.05, N.y));
+
+          diffuseColor.rgb = col;
+        }
+      `;
+
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', fragHead)
+        .replace('#include <map_fragment>', mapChunk)
+        .replace('#include <roughnessmap_fragment>',
+                 '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.55, 0.9, gHairness);');
+    };
+
+    /* ==================================================================
+     * 6) الرأس + محور الدوران
+     * ================================================================== */
+    // المجموعة عند pivotY و rig مزاح بعكسها: يبقى كل شيء في مكانه ويدور حول قاعدة الجمجمة
+    const headGroup = new THREE.Group();
+    headGroup.position.y = CONFIG.pivotY;
+    scene.add(headGroup);
+    const rig = new THREE.Group();
+    rig.position.y = -CONFIG.pivotY;
+    headGroup.add(rig);
+
+    // المجسم الخلفي (يعطي الجانبين والخلف)
+    const head = new THREE.Mesh(HeadGeometry.build(), skinMaterial);
+    head.renderOrder = 0;
+    rig.add(head);
+
+    // الصورة كما هي: لوح مسطح غير مضاء، فيبقى الشعر المتدلي بشكله الأصلي ولا يلتف على المجسم
+    const photoMaterial = new THREE.MeshBasicMaterial({
+      map: null, transparent: true, alphaTest: 0.01, toneMapped: false, side: THREE.FrontSide
+    });
+    const photoPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), photoMaterial);
+    photoPlane.renderOrder = 1;
+    photoPlane.visible = false;
+    rig.add(photoPlane);
+
+    /* ==================================================================
+     * 7) تحليل الصورة: ألوان الجلد والشعر + خريطة الامتداد
+     * ================================================================== */
+    const meanOf = (pts) => {
+      const m = [0, 0, 0];
+      for (const p of pts) { m[0] += p[0]; m[1] += p[1]; m[2] += p[2]; }
+      return m.map(v => v / pts.length);
+    };
+    const colDist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    function robustMean(pts) {
+      if (!pts || !pts.length) return null;
+      let m = meanOf(pts);
+      for (let it = 0; it < 3; it++) {
+        const ds = pts.map(p => colDist(p, m));
+        const thr = [...ds].sort((a, b) => a - b)[Math.floor(ds.length * 0.6)];
+        const keep = pts.filter((_, i) => ds[i] <= thr);
+        if (keep.length) m = meanOf(keep);
+      }
+      return m;
+    }
+
+    function analyzeImage(img) {
+      const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+      const k = Math.min(1, CONFIG.texMax / Math.max(iw, ih));
+      const W = Math.max(8, Math.round(iw * k)), H = Math.max(8, Math.round(ih * k));
+
+      const srcC = document.createElement('canvas');
+      srcC.width = W; srcC.height = H;
+      const sctx = srcC.getContext('2d', { willReadFrequently: true });
+      sctx.drawImage(img, 0, 0, W, H);
+      const src = sctx.getImageData(0, 0, W, H).data;
+
+      // — حدود المحتوى المرئي + هل الصورة مفرغة؟
+      let x0 = W, y0 = H, x1 = -1, y1 = -1, transparent = 0, sampled = 0;
+      for (let y = 0; y < H; y += 2) {
+        for (let x = 0; x < W; x += 2) {
+          const a = src[(y * W + x) * 4 + 3];
+          sampled++;
+          if (a < 250) transparent++;
+          if (a > 40) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        }
+      }
+      const hasAlpha = transparent / sampled > 0.01;
+      if (x1 < 0 || !hasAlpha) { x0 = 0; y0 = 0; x1 = W - 1; y1 = H - 1; }
+      const bx0 = x0 / W, bx1 = (x1 + 1) / W, by0 = y0 / H, by1 = (y1 + 1) / H;
+
+      // — خريطة الامتداد: متوسط الألوان في خلايا ثم ملء الفراغ من أقرب لون ثم تنعيم
+      const G = CONFIG.smearGrid;
+      const gw = W >= H ? G : Math.max(4, Math.round(G * W / H));
+      const gh = W >= H ? Math.max(4, Math.round(G * H / W)) : G;
+      const cells = gw * gh;
+      const sR = new Float32Array(cells), sG = new Float32Array(cells), sB = new Float32Array(cells);
+      const sA = new Float32Array(cells), cnt = new Float32Array(cells);
+      for (let y = 0; y < H; y += 2) {
+        for (let x = 0; x < W; x += 2) {
+          const i = (y * W + x) * 4, a = src[i + 3] / 255;
+          const ci = Math.min(gh - 1, (y * gh / H) | 0) * gw + Math.min(gw - 1, (x * gw / W) | 0);
+          cnt[ci]++; sA[ci] += a;
+          sR[ci] += src[i] * a; sG[ci] += src[i + 1] * a; sB[ci] += src[i + 2] * a;
+        }
+      }
+      let cr = new Float32Array(cells), cg = new Float32Array(cells), cb = new Float32Array(cells);
+      const valid = new Uint8Array(cells);
+      let missing = 0;
+      for (let ci = 0; ci < cells; ci++) {
+        if (cnt[ci] > 0 && sA[ci] > 0 && sA[ci] / cnt[ci] > 0.4) {
+          valid[ci] = 1; cr[ci] = sR[ci] / sA[ci]; cg[ci] = sG[ci] / sA[ci]; cb[ci] = sB[ci] / sA[ci];
+        } else missing++;
+      }
+      if (missing === cells) { cr.fill(200); cg.fill(151); cb.fill(124); missing = 0; }
+      for (let guard = 0; missing > 0 && guard < gw + gh; guard++) {
+        const upd = [];
+        for (let cy = 0; cy < gh; cy++) for (let cx = 0; cx < gw; cx++) {
+          const ci = cy * gw + cx;
+          if (valid[ci]) continue;
+          let r = 0, g = 0, b = 0, n = 0;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) continue;
+            const ni = ny * gw + nx;
+            if (valid[ni]) { r += cr[ni]; g += cg[ni]; b += cb[ni]; n++; }
+          }
+          if (n) upd.push([ci, r / n, g / n, b / n]);
+        }
+        if (!upd.length) break;
+        for (const u of upd) { valid[u[0]] = 1; cr[u[0]] = u[1]; cg[u[0]] = u[2]; cb[u[0]] = u[3]; }
+        missing -= upd.length;
+      }
+      for (let pass = 0; pass < 2; pass++) {       // تنعيم
+        const nr = new Float32Array(cells), ng = new Float32Array(cells), nb = new Float32Array(cells);
+        for (let cy = 0; cy < gh; cy++) for (let cx = 0; cx < gw; cx++) {
+          let r = 0, g = 0, b = 0, n = 0;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+            const nx = clamp(cx + dx, 0, gw - 1), ny = clamp(cy + dy, 0, gh - 1), ni = ny * gw + nx;
+            r += cr[ni]; g += cg[ni]; b += cb[ni]; n++;
+          }
+          const ci = cy * gw + cx;
+          nr[ci] = r / n; ng[ci] = g / n; nb[ci] = b / n;
+        }
+        cr = nr; cg = ng; cb = nb;
+      }
+      const smearC = document.createElement('canvas');
+      smearC.width = gw; smearC.height = gh;
+      const smx = smearC.getContext('2d');
+      const smData = smx.createImageData(gw, gh);
+      for (let ci = 0; ci < cells; ci++) {
+        smData.data[ci * 4] = cr[ci]; smData.data[ci * 4 + 1] = cg[ci];
+        smData.data[ci * 4 + 2] = cb[ci]; smData.data[ci * 4 + 3] = 255;
+      }
+      smx.putImageData(smData, 0, 0);
+
+      // — بيانات الصورة الأصلية كما هي (بلا تعديل)، مع تعبئة ألوان البكسلات الشفافة
+      //   من الخريطة الممتدة لمنع الهالات الداكنة عند الحواف
+      const upC = document.createElement('canvas');
+      upC.width = W; upC.height = H;
+      const uctx = upC.getContext('2d', { willReadFrequently: true });
+      uctx.imageSmoothingEnabled = true;
+      uctx.imageSmoothingQuality = 'high';
+      uctx.drawImage(smearC, 0, 0, W, H);
+      const up = uctx.getImageData(0, 0, W, H).data;
+      const photoArr = new Uint8Array(W * H * 4);
+      for (let y = 0; y < H; y++) {
+        const dstRow = (H - 1 - y) * W * 4;                 // قلب رأسي لـ DataTexture
+        for (let x = 0; x < W; x++) {
+          const p = (y * W + x) * 4, q = dstRow + x * 4;
+          const transparentPx = src[p + 3] < 10;
+          photoArr[q]     = transparentPx ? up[p]     : src[p];
+          photoArr[q + 1] = transparentPx ? up[p + 1] : src[p + 1];
+          photoArr[q + 2] = transparentPx ? up[p + 2] : src[p + 2];
+          photoArr[q + 3] = src[p + 3];
+        }
+      }
+
+      // — لوحة الألوان: جلد (الخدان) وشعر (أعلى المحتوى)
+      const collect = (fx0, fx1, fy0, fy1) => {
+        const px0 = Math.floor((bx0 + (bx1 - bx0) * fx0) * W), px1 = Math.ceil((bx0 + (bx1 - bx0) * fx1) * W);
+        const py0 = Math.floor((by0 + (by1 - by0) * fy0) * H), py1 = Math.ceil((by0 + (by1 - by0) * fy1) * H);
+        const sx = Math.max(1, Math.floor((px1 - px0) / 60)), sy = Math.max(1, Math.floor((py1 - py0) / 60));
+        const pts = [];
+        for (let y = py0; y < py1; y += sy) for (let x = px0; x < px1; x += sx) {
+          const i = (clamp(y, 0, H - 1) * W + clamp(x, 0, W - 1)) * 4;
+          if (src[i + 3] > 200) pts.push([src[i], src[i + 1], src[i + 2]]);
+        }
+        return pts;
+      };
+      const skin = robustMean([...collect(0.20, 0.38, 0.42, 0.62), ...collect(0.62, 0.80, 0.42, 0.62)])
+                || robustMean(collect(0.30, 0.70, 0.45, 0.75)) || [200, 151, 124];
+      const hair = robustMean(collect(0.30, 0.70, 0.0, 0.07))
+                || robustMean(collect(0.20, 0.80, 0.0, 0.15)) || [50, 38, 32];
+      const hairAmt = smooth(25, 65, colDist(hair, skin));
+
+      // — طول الشعر: نتتبع الحافة الخارجية نزولاً ما دامت بلون الشعر
+      let hairBottomFrac = 0.55;
+      if (hasAlpha && hairAmt > 0.5) {
+        let lastHair = 0, skinRun = 0;
+        for (let f = 0; f < 1; f += 0.02) {
+          const pts = [...collect(0, 0.10, f, f + 0.02), ...collect(0.90, 1.0, f, f + 0.02)];
+          if (!pts.length) continue;
+          const c = meanOf(pts);
+          const isHair = colDist(c, hair) < colDist(c, skin) && colDist(c, hair) < 70;
+          if (isHair) { lastHair = f + 0.02; skinRun = 0; }
+          else if (++skinRun >= 2 && lastHair > 0) break;
+        }
+        hairBottomFrac = lastHair > 0 ? lastHair : 0.4;
+      }
+
+      return {
+        photo: { data: photoArr, W, H }, smearCanvas: smearC, skin, hair, hairAmt,
+        aspect: W / H, bx0, bx1, by0, by1,
+        hairBottomNorm: by0 + (by1 - by0) * hairBottomFrac
+      };
+    }
+
+    /* ==================================================================
+     * 8) تطبيق الصورة وضبط الموضع
+     * ================================================================== */
+    const state = { analysis: null, scale: 1, offX: 0, offY: 0 };   // المنزلقات تضبط المجسم الخلفي
+
+    function applyFit() {
+      const a = state.analysis;
+      if (!a) return;
+      const P = CONFIG.photo;
+
+      // الصورة: عرض المحتوى ثابت، والمركز ثابت
+      const fw = P.contentWidth / (a.bx1 - a.bx0);
+      const fh = fw / a.aspect;
+      const pcx = -(((a.bx0 + a.bx1) / 2) - 0.5) * fw;
+      const pcy = P.centerY + (((a.by0 + a.by1) / 2) - 0.5) * fh;
+      const contentH = (a.by1 - a.by0) * fh;
+      const contentTop = P.centerY + contentH / 2;
+
+      // المجسم الخلفي: أصغر من الصورة بقليل ومحاذٍ لأعلى المحتوى
+      const ms = state.scale * (P.headFill * P.contentWidth) / (2 * 0.685);
+      const mx = state.offX;
+      const my = contentTop - P.topGap * contentH - 1.0 * ms + state.offY;
+      head.scale.setScalar(ms);
+      head.position.set(mx, my, 0);
+
+      photoPlane.scale.set(fw, fh, 1);
+      photoPlane.position.set(pcx, pcy, 0.70 * ms + 0.04);
+      photoPlane.visible = true;
+
+      // إحداثيات الإطار داخل فضاء المجسم المحلي
+      U.uFrameSize.value.set(fw / ms, fh / ms);
+      U.uFrameCenter.value.set((pcx - mx) / ms, (pcy - my) / ms);
+
+      const hairBottomLocal = ((pcy + (0.5 - a.hairBottomNorm) * fh) - my) / ms;
+      U.uBackHairY.value = a.hairAmt > 0.5 ? clamp(Math.min(-0.5, hairBottomLocal - 0.15), -1.3, -0.5) : -0.5;
+    }
+
+    function applyAnalysis(a) {
+      const smear = new THREE.CanvasTexture(a.smearCanvas);
+      smear.colorSpace = THREE.SRGBColorSpace;
+      smear.wrapS = smear.wrapT = THREE.ClampToEdgeWrapping;
+      smear.needsUpdate = true;
+      U.uSmear.value.dispose();
+      U.uSmear.value = smear;
+
+      const photo = new THREE.DataTexture(a.photo.data, a.photo.W, a.photo.H, THREE.RGBAFormat);
+      photo.colorSpace = THREE.SRGBColorSpace;
+      photo.wrapS = photo.wrapT = THREE.ClampToEdgeWrapping;
+      photo.generateMipmaps = true;
+      photo.minFilter = THREE.LinearMipmapLinearFilter;
+      photo.magFilter = THREE.LinearFilter;
+      photo.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      photo.needsUpdate = true;
+      if (photoMaterial.map) photoMaterial.map.dispose();
+      photoMaterial.map = photo;
+      photoMaterial.needsUpdate = true;
+
+      U.uSkin.value = srgb(...a.skin);
+      U.uHair.value = srgb(...a.hair);
+      U.uHairAmt.value = a.hairAmt;
+      state.analysis = a;
+      applyFit();
+    }
+
+    /* ==================================================================
+     * 9) الدوران — نفس نظام التحريك السابق
+     * ================================================================== */
+    const R = CONFIG.rotation;
+    let rotY = 0, rotX = 0, targetRotY = 0, targetRotX = 0;
+    let dragging = false, startX = 0, startY = 0, startRotY = 0, startRotX = 0;
+
+    function resize() {
+      const width = Math.max(1, container.clientWidth);
+      const height = Math.max(1, container.clientHeight);
+      renderer.setSize(width, height, false);
+      camera.aspect = width / height;
+      camera.position.z = width < 360 ? 5.5 : 4.9;
+      camera.updateProjectionMatrix();
+    }
+    new ResizeObserver(resize).observe(container);
+    window.addEventListener('resize', resize);
+    resize();
+
     function animate() {
       requestAnimationFrame(animate);
-      rotY += (targetRotY - rotY) * SMOOTH;
-      rotX += (targetRotX - rotX) * SMOOTH;
-      headGroup.rotation.y = rotY;
-      headGroup.rotation.x = rotX;
+      rotY += (targetRotY - rotY) * R.smooth;
+      rotX += (targetRotX - rotX) * R.smooth;
+      headGroup.rotation.set(THREE.MathUtils.degToRad(rotX), THREE.MathUtils.degToRad(rotY), 0);
       renderer.render(scene, camera);
     }
     animate();
 
-    function resize() {
-      const w = sceneEl.clientWidth;
-      const h = sceneEl.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h, false);
+    document.getElementById('leftBtn').addEventListener('click', () => { targetRotY = clamp(targetRotY - R.stepY, -R.maxY, R.maxY); });
+    document.getElementById('rightBtn').addEventListener('click', () => { targetRotY = clamp(targetRotY + R.stepY, -R.maxY, R.maxY); });
+    document.getElementById('upBtn').addEventListener('click', () => { targetRotX = clamp(targetRotX + R.stepX, -R.maxX, R.maxX); });
+    document.getElementById('resetBtn').addEventListener('click', () => { targetRotY = 0; targetRotX = 0; });
+
+    container.addEventListener('pointerdown', (e) => {
+      if (e.target !== renderer.domElement) return;
+      dragging = true;
+      startX = e.clientX; startY = e.clientY;
+      startRotY = targetRotY; startRotX = targetRotX;
+      container.setPointerCapture?.(e.pointerId);
+      e.preventDefault();
+    });
+    container.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      targetRotY = clamp(startRotY + (e.clientX - startX) * R.dragY, -R.maxY, R.maxY);
+      targetRotX = clamp(startRotX - (e.clientY - startY) * R.dragX, -R.maxX, R.maxX);
+    });
+    const stopDrag = () => { dragging = false; };
+    container.addEventListener('pointerup', stopDrag);
+    container.addEventListener('pointercancel', stopDrag);
+    container.addEventListener('lostpointercapture', stopDrag);
+
+    /* ==================================================================
+     * 10) رفع الصورة وواجهة الضبط
+     * ================================================================== */
+    const faceUpload = document.getElementById('faceUpload');
+    const faceStatus = document.getElementById('faceStatus');
+    const fitSection = document.getElementById('fitSection');
+    const scaleRange = document.getElementById('scaleRange');
+    const yRange = document.getElementById('yRange');
+    const xRange = document.getElementById('xRange');
+
+    function loadImage(file) {
+      return new Promise((resolve, reject) => {
+        if (!file.type.startsWith('image/')) { reject(new Error('الرجاء اختيار ملف صورة صالح')); return; }
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('تعذر تحميل الصورة')); };
+        img.src = url;
+      });
     }
-    new ResizeObserver(resize).observe(sceneEl);
-    resize();
+
+    faceUpload.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      try {
+        faceStatus.textContent = 'جارٍ المعالجة…';
+        faceStatus.classList.remove('ready');
+        statusEl.textContent = 'يجري توليد الجانبين والخلف من الصورة…';
+        const img = await loadImage(file);
+        await new Promise(r => setTimeout(r, 30));          // اسمح للواجهة بالرسم
+        state.scale = 1; state.offX = 0; state.offY = 0;
+        applyAnalysis(analyzeImage(img));
+        scaleRange.value = 1; yRange.value = 0; xRange.value = 0;
+        fitSection.classList.remove('disabled');
+        faceStatus.textContent = '✓ جاهزة';
+        faceStatus.classList.add('ready');
+        statusEl.textContent = 'تم تطبيق الصورة وتوليد بقية الرأس منها.';
+      } catch (err) {
+        faceStatus.textContent = 'فشل';
+        statusEl.textContent = err.message || 'حدث خطأ أثناء معالجة الصورة';
+      }
+    });
+
+    scaleRange.addEventListener('input', () => { state.scale = parseFloat(scaleRange.value); applyFit(); });
+    yRange.addEventListener('input', () => { state.offY = parseFloat(yRange.value); applyFit(); });
+    xRange.addEventListener('input', () => { state.offX = parseFloat(xRange.value); applyFit(); });
 
     window.addEventListener('beforeunload', () => {
-      renderer.dispose();
+      U.uSmear.value.dispose(); photoMaterial.map?.dispose();
+      head.geometry.dispose(); skinMaterial.dispose(); renderer.dispose();
     });
   </script>
 </body>
 </html>
+```
