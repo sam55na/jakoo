@@ -75,6 +75,8 @@
     .upload-section {
       margin-top: 16px;
       display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
       align-items: center;
       justify-content: center;
       padding: 12px 20px;
@@ -88,27 +90,38 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 10px 22px;
+      padding: 10px 20px;
       border: 1px solid rgba(255,255,255,.2);
       border-radius: 40px;
       color: white;
       background: linear-gradient(135deg,#6a5acd,#8a7bdd);
       box-shadow: 0 4px 15px rgba(106,90,205,.38);
-      font-size: .95rem;
+      font-size: .9rem;
       font-weight: 600;
       cursor: pointer;
       transition: transform .2s, box-shadow .2s;
     }
-    .upload-label:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(106,90,205,.55); }
+    .upload-label.side {
+      background: linear-gradient(135deg,#4a7a6a,#6aa08d);
+      box-shadow: 0 4px 15px rgba(74,122,106,.38);
+    }
+    .upload-label:hover { transform: translateY(-2px); }
     .upload-label input { display: none; }
+    .upload-status {
+      font-size: .75rem;
+      color: #9ba3b0;
+      min-width: 60px;
+      text-align: center;
+    }
+    .upload-status.ready { color: #7ed4a8; }
     .hint {
-      max-width: min(540px, 92vw);
+      max-width: min(560px, 92vw);
       margin-top: 14px;
       padding: 9px 17px;
       border-radius: 30px;
       color: #b0b8c5;
       background: rgba(0,0,0,.26);
-      font-size: .84rem;
+      font-size: .82rem;
       line-height: 1.6;
       text-align: center;
     }
@@ -118,6 +131,7 @@
       .face-container { height: min(460px, 59vh); min-height: 330px; }
       .controls { gap: 8px; padding: 10px 12px; }
       .controls button { padding: 9px 13px; font-size: .9rem; }
+      .upload-label { padding: 9px 15px; font-size: .82rem; }
     }
   </style>
 </head>
@@ -133,20 +147,33 @@
     <button id="resetBtn" title="إعادة تعيين"><i>⟲</i> إعادة</button>
   </nav>
 
-  <section class="upload-section" aria-label="رفع صورة">
-    <label class="upload-label" for="imageUpload">
-      <span aria-hidden="true">📷</span> اختر صورة وجهك
-      <input type="file" id="imageUpload" accept="image/*">
+  <section class="upload-section" aria-label="رفع الصور">
+    <label class="upload-label" for="faceUpload">
+      <span aria-hidden="true">🙂</span> صورة الوجه الأمامي
+      <input type="file" id="faceUpload" accept="image/*">
     </label>
+    <span class="upload-status" id="faceStatus">لم تُرفع</span>
+
+    <label class="upload-label side" for="sideUpload">
+      <span aria-hidden="true">💇</span> صورة الشعر / الجوانب
+      <input type="file" id="sideUpload" accept="image/*">
+    </label>
+    <span class="upload-status" id="sideStatus">لم تُرفع</span>
   </section>
-  <p class="hint">الصورة تُكبَّر لتملأ الوجه بالكامل مع الحفاظ على نسبها، والمناطق الجانبية تأخذ ألوان حوافها من الصورة.</p>
+
+  <p class="hint">
+    ارفع صورتين منفصلتين: الأولى للوجه الأمامي، والثانية للشعر والجوانب. كل صورة تُعرض كما هي بدون أي تغيير.
+  </p>
   <p class="status" id="status" aria-live="polite"></p>
 
   <script type="module">
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js';
 
     const container = document.getElementById('faceContainer');
-    const upload = document.getElementById('imageUpload');
+    const faceUpload = document.getElementById('faceUpload');
+    const sideUpload = document.getElementById('sideUpload');
+    const faceStatus = document.getElementById('faceStatus');
+    const sideStatus = document.getElementById('sideStatus');
     const status = document.getElementById('status');
 
     // ============================================================
@@ -187,7 +214,7 @@
     scene.add(headGroup);
 
     // ============================================================
-    // القماش (Canvas)
+    // القماش
     // ============================================================
     const TEX_W = 2048;
     const TEX_H = 2048;
@@ -197,14 +224,16 @@
     skinCanvas.height = TEX_H;
     const skinCtx = skinCanvas.getContext('2d');
 
-    let currentPhoto = null;
+    let facePhoto = null;   // صورة الوجه الأمامي
+    let sidePhoto = null;   // صورة الشعر / الجوانب
     let headTexture;
 
     // ============================================================
-    // ✅ دالة رسم الصورة بنمط "cover" الحقيقي
-    // - تحافظ على نسبة الأبعاد
-    // - تكبّر الصورة حتى تغطي الإطار بالكامل
-    // - تقص الأجزاء الزائدة (لا تمدد!)
+    // ✅ رسم صورة داخل مستطيل بنمط cover
+    //    - تحافظ على نسبة الأبعاد
+    //    - تكبّر الصورة حتى تغطي المستطيل بالكامل
+    //    - تقص الأجزاء الزائدة على الحواف فقط
+    //    - الصورة نفسها لا تُشوَّه أبداً
     // ============================================================
     function drawImageCover(ctx, image, destX, destY, destW, destH) {
       const imgW = image.width;
@@ -213,229 +242,215 @@
       const destAspect = destW / destH;
 
       let srcX, srcY, srcW, srcH;
-
       if (imgAspect > destAspect) {
-        // الصورة أعرض من الهدف: نقص الجانبين
+        // الصورة أعرض من الهدف → نقص الجانبين
         srcH = imgH;
         srcW = imgH * destAspect;
         srcX = (imgW - srcW) / 2;
         srcY = 0;
       } else {
-        // الصورة أطول من الهدف: نقص الأعلى والأسفل
+        // الصورة أطول من الهدف → نقص الأعلى والأسفل
         srcW = imgW;
         srcH = imgW / destAspect;
         srcX = 0;
         srcY = (imgH - srcH) / 2;
       }
 
-      // ✅ رسم الصورة بشكل صحيح (تكبير متناسق + قص)
       ctx.drawImage(
         image,
-        srcX, srcY, srcW, srcH,       // المنطقة المقتطعة من المصدر
-        destX, destY, destW, destH    // الحجم النهائي (بدون تشويه)
+        srcX, srcY, srcW, srcH,
+        destX, destY, destW, destH
       );
     }
 
     // ============================================================
-    // استخراج ألوان الحواف من الصورة
+    // ✅ حساب ألوان الحواف (لدمج الصورتين بدون خط فاصل)
     // ============================================================
-    function extractEdgeColors(image) {
-      const sampleW = 256;
-      const sampleH = 256;
+    function extractColumnColors(image, xRatio, sampleH = 128) {
+      const sampleW = 512;
+      const sampleH_canvas = 512;
+
       const sample = document.createElement('canvas');
       sample.width = sampleW;
-      sample.height = sampleH;
+      sample.height = sampleH_canvas;
       const ctx = sample.getContext('2d', { willReadFrequently: true });
 
-      ctx.drawImage(image, 0, 0, sampleW, sampleH);
+      ctx.drawImage(image, 0, 0, sampleW, sampleH_canvas);
 
-      const leftData = ctx.getImageData(0, 0, 1, sampleH).data;
-      const rightData = ctx.getImageData(sampleW - 1, 0, 1, sampleH).data;
+      const px = Math.min(sampleW - 1, Math.max(0, Math.floor(xRatio * sampleW)));
+      const data = ctx.getImageData(px, 0, 1, sampleH_canvas).data;
 
-      const leftColors = [];
-      const rightColors = [];
+      const colors = [];
       for (let i = 0; i < sampleH; i++) {
-        const li = i * 4;
-        leftColors.push({
-          r: leftData[li],
-          g: leftData[li + 1],
-          b: leftData[li + 2]
-        });
-        rightColors.push({
-          r: rightData[li],
-          g: rightData[li + 1],
-          b: rightData[li + 2]
+        const sy = Math.floor((i / sampleH) * (sampleH_canvas - 1));
+        const si = sy * 4;
+        colors.push({
+          r: data[si],
+          g: data[si + 1],
+          b: data[si + 2]
         });
       }
-      return { leftColors, rightColors, sampleH };
+      return colors;
     }
 
     // ============================================================
-    // ✅ رسم القماش
+    // ✅ رسم القماش النهائي
     //
-    // المنطق:
-    // 1. الصورة تُكبَّر بنمط cover لتملأ الوجه بالكامل
-    // 2. المنطقتان الجانبيتان في UV تأخذان ألوانها من حواف الصورة
-    // 3. لا حواف فارغة، لا تمدد
+    // التخطيط:
+    //  ┌─────────────┬──────────────┬─────────────┐
+    //  │  الجانب    │    الوجه     │   الجانب    │
+    //  │  الأيسر    │   الأمامي    │   الأيمن    │
+    //  │  u=0→0.25  │  u=0.25→0.75 │ u=0.75→1.0  │
+    //  └─────────────┴──────────────┴─────────────┘
+    //
+    // كل صورة تُرسم في منطقتها فقط بنمط cover
+    // ثم نضيف منطقة دمج صغيرة بينهما (بدون خط واضح)
     // ============================================================
     function paintHeadTexture() {
       skinCtx.clearRect(0, 0, TEX_W, TEX_H);
 
-      if (!currentPhoto) {
-        skinCtx.fillStyle = '#d9bfa8';
-        skinCtx.fillRect(0, 0, TEX_W, TEX_H);
-        if (headTexture) headTexture.needsUpdate = true;
-        return;
-      }
-
-      // ============================================================
-      // 1) حساب ألوان الحواف أولاً
-      // ============================================================
-      const { leftColors, rightColors, sampleH } = extractEdgeColors(currentPhoto);
-
-      // متوسط اللون من الحواف
-      let avgR = 0, avgG = 0, avgB = 0, count = 0;
-      for (let i = 0; i < sampleH; i++) {
-        avgR += leftColors[i].r + rightColors[i].r;
-        avgG += leftColors[i].g + rightColors[i].g;
-        avgB += leftColors[i].b + rightColors[i].b;
-        count += 2;
-      }
-      avgR = Math.round(avgR / count);
-      avgG = Math.round(avgG / count);
-      avgB = Math.round(avgB / count);
-
-      // ملء كامل القماش بالمتوسط (خلفية احتياطية)
-      skinCtx.fillStyle = `rgb(${avgR},${avgG},${avgB})`;
+      // 1) خلفية افتراضية
+      skinCtx.fillStyle = '#3a3230';
       skinCtx.fillRect(0, 0, TEX_W, TEX_H);
 
-      // ============================================================
-      // 2) ✅ رسم الصورة بنمط cover في منطقة الوجه الأمامية
-      //
-      // منطقة الوجه في UV: من u=0.25 إلى u=0.75
-      // أي: عرض = نصف القماش، يغطي الجهة الأمامية بالكامل
-      // ============================================================
-      const faceU0 = 0.25;
-      const faceU1 = 0.75;
-      const faceX = TEX_W * faceU0;
-      const faceW = TEX_W * (faceU1 - faceU0);
+      // 2) منطقة الوجه (النصف الأوسط من UV)
+      const faceX = TEX_W * 0.25;
+      const faceW = TEX_W * 0.50;
       const faceY = 0;
       const faceH = TEX_H;
 
-      drawImageCover(skinCtx, currentPhoto, faceX, faceY, faceW, faceH);
+      // 3) منطقتا الجانبين
+      const sideLeftX = 0;
+      const sideLeftW = TEX_W * 0.25;
+      const sideRightX = TEX_W * 0.75;
+      const sideRightW = TEX_W * 0.25;
 
       // ============================================================
-      // 3) ✅ تمديد الجوانب بألوان من حواف الصورة نفسها
-      // كل صف أفقي في الشريط الجانبي يأخذ لونه من نفس الصف في حافة الصورة
+      // رسم صورة الوجه الأمامي (كما هي، بنمط cover في منطقتها)
       // ============================================================
-      const leftBandW = Math.ceil(TEX_W * faceU0);      // عرض الشريط الأيسر
-      const rightBandW = Math.ceil(TEX_W * (1 - faceU1)); // عرض الشريط الأيمن
-
-      // نرسم الصورة على canvas مؤقت لأخذ البكسلات الحقيقية
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = currentPhoto.width;
-      tempCanvas.height = currentPhoto.height;
-      const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-      tempCtx.drawImage(currentPhoto, 0, 0);
-
-      // ملاحظة: يجب أن يكون القص متطابقاً مع drawImageCover
-      // نحسب نفس المنطقة المقتطعة
-      const imgW = currentPhoto.width;
-      const imgH = currentPhoto.height;
-      const imgAspect = imgW / imgH;
-      const destAspect = faceW / faceH;
-
-      let srcX, srcY, srcW, srcH;
-      if (imgAspect > destAspect) {
-        srcH = imgH;
-        srcW = imgH * destAspect;
-        srcX = (imgW - srcW) / 2;
-        srcY = 0;
+      if (facePhoto) {
+        drawImageCover(skinCtx, facePhoto, faceX, faceY, faceW, faceH);
       } else {
-        srcW = imgW;
-        srcH = imgW / destAspect;
-        srcX = 0;
-        srcY = (imgH - srcH) / 2;
-      }
-
-      // أعمدة الحواف الحقيقية (بعد القص)
-      let leftEdgeData = null;
-      let rightEdgeData = null;
-      try {
-        leftEdgeData = tempCtx.getImageData(
-          Math.floor(srcX), Math.floor(srcY), 1, Math.floor(srcH)
-        ).data;
-        rightEdgeData = tempCtx.getImageData(
-          Math.floor(srcX + srcW) - 1, Math.floor(srcY), 1, Math.floor(srcH)
-        ).data;
-      } catch (e) {
-        console.warn('تعذر قراءة حواف الصورة:', e);
+        // خلفية لون بشرة افتراضية
+        skinCtx.fillStyle = '#d9bfa8';
+        skinCtx.fillRect(faceX, faceY, faceW, faceH);
       }
 
       // ============================================================
-      // رسم الشريط الأيسر
+      // رسم صورة الجوانب (كما هي، بنمط cover في المنطقة اليسرى واليمنى)
+      // نرسمها في المنطقة اليسرى واليمنى بنفس الصورة
       // ============================================================
-      if (leftEdgeData) {
+      if (sidePhoto) {
+        // الجانب الأيسر
+        drawImageCover(skinCtx, sidePhoto, sideLeftX, 0, sideLeftW, TEX_H);
+
+        // الجانب الأيمن - نعكس الصورة أفقياً ليبدو الشعر طبيعياً من الجهتين
+        skinCtx.save();
+        skinCtx.translate(sideRightX + sideRightW, 0);
+        skinCtx.scale(-1, 1);
+        drawImageCover(skinCtx, sidePhoto, 0, 0, sideRightW, TEX_H);
+        skinCtx.restore();
+      } else if (facePhoto) {
+        // في حال عدم رفع صورة الجوانب، نملأ الجانبين بلون مستخرج من حواف الوجه
+        const leftColors = extractColumnColors(facePhoto, 0.0, 128);
+        const rightColors = extractColumnColors(facePhoto, 1.0, 128);
+
         const leftBand = document.createElement('canvas');
-        leftBand.width = leftBandW;
+        leftBand.width = 4;
         leftBand.height = TEX_H;
         const lbCtx = leftBand.getContext('2d');
-        const bandImg = lbCtx.createImageData(leftBandW, TEX_H);
-
+        const leftImg = lbCtx.createImageData(4, TEX_H);
         for (let y = 0; y < TEX_H; y++) {
-          // نأخذ اللون من نفس النسبة في حافة الصورة
-          const srcYi = Math.floor((y / TEX_H) * (srcH - 1));
-          const si = srcYi * 4;
-          const r = leftEdgeData[si];
-          const g = leftEdgeData[si + 1];
-          const b = leftEdgeData[si + 2];
-
-          for (let x = 0; x < leftBandW; x++) {
-            // تلاشي تدريجي كلما ابتعدنا (ناحية u=0)
-            // x=0 هو الأبعد، x=leftBandW-1 هو الملاصق للصورة
-            const distFromImage = (leftBandW - 1 - x) / leftBandW;
-            const fade = 1 - distFromImage * 0.25;
-            const di = (y * leftBandW + x) * 4;
-            bandImg.data[di]     = Math.round(r * fade + avgR * (1 - fade));
-            bandImg.data[di + 1] = Math.round(g * fade + avgG * (1 - fade));
-            bandImg.data[di + 2] = Math.round(b * fade + avgB * (1 - fade));
-            bandImg.data[di + 3] = 255;
+          const ci = Math.floor((y / TEX_H) * (leftColors.length - 1));
+          const col = leftColors[ci];
+          for (let x = 0; x < 4; x++) {
+            const di = (y * 4 + x) * 4;
+            leftImg.data[di] = col.r;
+            leftImg.data[di + 1] = col.g;
+            leftImg.data[di + 2] = col.b;
+            leftImg.data[di + 3] = 255;
           }
         }
-        lbCtx.putImageData(bandImg, 0, 0);
-        skinCtx.drawImage(leftBand, 0, 0, leftBandW, TEX_H, 0, 0, leftBandW, TEX_H);
+        lbCtx.putImageData(leftImg, 0, 0);
+        skinCtx.drawImage(leftBand, 0, 0, 4, TEX_H, 0, 0, sideLeftW, TEX_H);
+
+        const rightBand = document.createElement('canvas');
+        rightBand.width = 4;
+        rightBand.height = TEX_H;
+        const rbCtx = rightBand.getContext('2d');
+        const rightImg = rbCtx.createImageData(4, TEX_H);
+        for (let y = 0; y < TEX_H; y++) {
+          const ci = Math.floor((y / TEX_H) * (rightColors.length - 1));
+          const col = rightColors[ci];
+          for (let x = 0; x < 4; x++) {
+            const di = (y * 4 + x) * 4;
+            rightImg.data[di] = col.r;
+            rightImg.data[di + 1] = col.g;
+            rightImg.data[di + 2] = col.b;
+            rightImg.data[di + 3] = 255;
+          }
+        }
+        rbCtx.putImageData(rightImg, 0, 0);
+        skinCtx.drawImage(rightBand, 0, 0, 4, TEX_H, sideRightX, 0, sideRightW, TEX_H);
       }
 
       // ============================================================
-      // رسم الشريط الأيمن
+      // ✅ دمج ناعم عند الحدود بين الوجه والجانبين
+      // نأخذ شريطاً ضيقاً من حدود صورة الوجه ونضعه كتدريج فوق الحد الفاصل
       // ============================================================
-      if (rightEdgeData) {
-        const rightBand = document.createElement('canvas');
-        rightBand.width = rightBandW;
-        rightBand.height = TEX_H;
-        const rbCtx = rightBand.getContext('2d');
-        const bandImg = rbCtx.createImageData(rightBandW, TEX_H);
+      if (facePhoto) {
+        const blendW = TEX_W * 0.012; // عرض منطقة الدمج
+        // نأخذ شريطاً رفيعاً من حدود صورة الوجه
+        const edgeLeft = extractColumnColors(facePhoto, 0.0, 64);
+        const edgeRight = extractColumnColors(facePhoto, 1.0, 64);
 
+        // حدود اليسار (نهاية الجانب الأيسر)
+        const blendLeft = document.createElement('canvas');
+        blendLeft.width = Math.ceil(blendW);
+        blendLeft.height = TEX_H;
+        const blCtx = blendLeft.getContext('2d');
+        const blImg = blCtx.createImageData(blendLeft.width, TEX_H);
         for (let y = 0; y < TEX_H; y++) {
-          const srcYi = Math.floor((y / TEX_H) * (srcH - 1));
-          const si = srcYi * 4;
-          const r = rightEdgeData[si];
-          const g = rightEdgeData[si + 1];
-          const b = rightEdgeData[si + 2];
-
-          for (let x = 0; x < rightBandW; x++) {
-            // x=0 ملاصق للصورة، x=rightBandW-1 هو الأبعد
-            const distFromImage = x / rightBandW;
-            const fade = 1 - distFromImage * 0.25;
-            const di = (y * rightBandW + x) * 4;
-            bandImg.data[di]     = Math.round(r * fade + avgR * (1 - fade));
-            bandImg.data[di + 1] = Math.round(g * fade + avgG * (1 - fade));
-            bandImg.data[di + 2] = Math.round(b * fade + avgB * (1 - fade));
-            bandImg.data[di + 3] = 255;
+          const ci = Math.floor((y / TEX_H) * (edgeLeft.length - 1));
+          const col = edgeLeft[ci];
+          for (let x = 0; x < blendLeft.width; x++) {
+            // يتلاشى نحو الجانب
+            const t = x / blendLeft.width;      // 0 في الملامسة للوجه
+            const alpha = Math.round(255 * (1 - t));
+            const di = (y * blendLeft.width + x) * 4;
+            blImg.data[di] = col.r;
+            blImg.data[di + 1] = col.g;
+            blImg.data[di + 2] = col.b;
+            blImg.data[di + 3] = alpha;
           }
         }
-        rbCtx.putImageData(bandImg, 0, 0);
-        skinCtx.drawImage(rightBand, 0, 0, rightBandW, TEX_H, TEX_W - rightBandW, 0, rightBandW, TEX_H);
+        blCtx.putImageData(blImg, 0, 0);
+        // رسم الشريط على المنطقة الفاصلة (نهاية الجانب الأيسر)
+        skinCtx.drawImage(blendLeft, 0, 0, blendLeft.width, TEX_H,
+                          faceX - blendW, 0, blendW, TEX_H);
+
+        // حدود اليمين
+        const blendRight = document.createElement('canvas');
+        blendRight.width = Math.ceil(blendW);
+        blendRight.height = TEX_H;
+        const brCtx = blendRight.getContext('2d');
+        const brImg = brCtx.createImageData(blendRight.width, TEX_H);
+        for (let y = 0; y < TEX_H; y++) {
+          const ci = Math.floor((y / TEX_H) * (edgeRight.length - 1));
+          const col = edgeRight[ci];
+          for (let x = 0; x < blendRight.width; x++) {
+            const t = x / blendRight.width;      // 0 في الملامسة للوجه
+            const alpha = Math.round(255 * t);
+            const di = (y * blendRight.width + x) * 4;
+            brImg.data[di] = col.r;
+            brImg.data[di + 1] = col.g;
+            brImg.data[di + 2] = col.b;
+            brImg.data[di + 3] = alpha;
+          }
+        }
+        brCtx.putImageData(brImg, 0, 0);
+        skinCtx.drawImage(blendRight, 0, 0, blendRight.width, TEX_H,
+                          faceX + faceW, 0, blendW, TEX_H);
       }
 
       if (headTexture) headTexture.needsUpdate = true;
@@ -470,10 +485,8 @@
 
         let ring;
         if (yn >= 0) {
-          // النصف العلوي: عريض (الجمجمة)
           ring = Math.pow(Math.max(0, 1 - yn * yn), 0.42);
         } else {
-          // النصف السفلي: مدبب (الفك)
           ring = Math.pow(Math.max(0, 1 - yn * yn), 0.62);
         }
 
@@ -576,7 +589,7 @@
     animate();
 
     // ============================================================
-    // أزرار التحكم
+    // أزرار
     // ============================================================
     document.getElementById('leftBtn').addEventListener('click', () => {
       targetRotY = clamp(targetRotY - 8, -MAX_Y, MAX_Y);
@@ -618,46 +631,71 @@
     container.addEventListener('lostpointercapture', stopDrag);
 
     // ============================================================
-    // رفع الصورة
+    // رفع الصور
     // ============================================================
-    let userUploadedPhoto = false;
-
-    upload.addEventListener('change', (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-
+    function handleUpload(file, onLoad, onError) {
       if (!file.type.startsWith('image/')) {
-        alert('الرجاء اختيار ملف صورة صالح');
-        upload.value = '';
+        onError('الرجاء اختيار ملف صورة صالح');
         return;
       }
-
       const image = new Image();
       image.onload = () => {
-        userUploadedPhoto = true;
-        currentPhoto = image;
-        paintHeadTexture();
-        status.textContent = 'تم تطبيق الصورة بتكبير متناسق على كامل الوجه.';
+        onLoad(image);
         URL.revokeObjectURL(image.src);
       };
       image.onerror = () => {
-        status.textContent = 'تعذر تحميل الصورة. جرّب ملف صورة آخر.';
+        onError('تعذر تحميل الصورة');
         URL.revokeObjectURL(image.src);
       };
       image.src = URL.createObjectURL(file);
+    }
+
+    // رفع صورة الوجه
+    faceUpload.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      handleUpload(
+        file,
+        (image) => {
+          facePhoto = image;
+          faceStatus.textContent = '✓ جاهزة';
+          faceStatus.classList.add('ready');
+          paintHeadTexture();
+          status.textContent = 'تم تطبيق صورة الوجه الأمامي.';
+        },
+        (err) => { status.textContent = err; }
+      );
     });
 
-    // صورة افتراضية
-    const sample = new Image();
-    sample.crossOrigin = 'anonymous';
-    sample.onload = () => {
-      if (!userUploadedPhoto) {
-        currentPhoto = sample;
+    // رفع صورة الجوانب
+    sideUpload.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      handleUpload(
+        file,
+        (image) => {
+          sidePhoto = image;
+          sideStatus.textContent = '✓ جاهزة';
+          sideStatus.classList.add('ready');
+          paintHeadTexture();
+          status.textContent = 'تم تطبيق صورة الجوانب.';
+        },
+        (err) => { status.textContent = err; }
+      );
+    });
+
+    // صورة افتراضية للوجه (اختيارية)
+    const sampleFace = new Image();
+    sampleFace.crossOrigin = 'anonymous';
+    sampleFace.onload = () => {
+      if (!facePhoto) {
+        facePhoto = sampleFace;
+        faceStatus.textContent = 'افتراضية';
         paintHeadTexture();
       }
     };
-    sample.onerror = () => {};
-    sample.src = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80&ixlib=rb-4.0.3';
+    sampleFace.onerror = () => {};
+    sampleFace.src = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80&ixlib=rb-4.0.3';
 
     window.addEventListener('beforeunload', () => {
       headTexture.dispose();
