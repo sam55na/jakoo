@@ -123,7 +123,7 @@
 </head>
 <body>
   <main class="scene" aria-label="عارض رأس إنسان ثلاثي الأبعاد">
-    <div class="face-container" id="faceContainer" role="img" aria-label="رأس بيضوي ثلاثي الأبعاد قابل للدوران">
+    <div class="face-container" id="faceContainer" role="img" aria-label="رأس بيضوي ثلاثي الأبعاد قابل للدوران"></div>
   </main>
 
   <nav class="controls" aria-label="أدوات تدوير الرأس">
@@ -139,7 +139,7 @@
       <input type="file" id="imageUpload" accept="image/*">
     </label>
   </section>
-  <p class="hint">رأس بيضوي فقط بلا أذنين أو رقبة. اسحب لتدويره وارفع صورة أمامية واضحة ليغطي ملمسها كامل واجهة الرأس.</p>
+  <p class="hint">رأس بيضوي مقلوب: الأعلى عريض والأسفل مدبّب. الصورة تغطي السطح بالكامل بدون أي حواف ظاهرة.</p>
   <p class="status" id="status" aria-live="polite"></p>
 
   <script type="module">
@@ -148,45 +148,58 @@
     const container = document.getElementById('faceContainer');
     const upload = document.getElementById('imageUpload');
     const status = document.getElementById('status');
+
+    // ============================================================
+    // إعداد المشهد
+    // ============================================================
     const scene = new THREE.Scene();
     scene.background = null;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance'
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.08;
-    container.prepend(renderer.domElement);
+    renderer.toneMappingExposure = 1.05;
+    container.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
-    camera.position.set(0, 0.05, 6.25);
+    camera.position.set(0, 0.05, 5.6);
 
-    scene.add(new THREE.HemisphereLight(0xe5edff, 0x453326, 2.0));
-    const keyLight = new THREE.DirectionalLight(0xffe2ca, 3.0);
+    // إضاءة
+    scene.add(new THREE.HemisphereLight(0xe5edff, 0x453326, 1.9));
+
+    const keyLight = new THREE.DirectionalLight(0xffe2ca, 2.8);
     keyLight.position.set(-3.5, 4.5, 5.0);
     scene.add(keyLight);
-    const fillLight = new THREE.DirectionalLight(0xc6d5ff, 1.35);
+
+    const fillLight = new THREE.DirectionalLight(0xc6d5ff, 1.2);
     fillLight.position.set(4.0, 1.0, 3.0);
     scene.add(fillLight);
-    const rimLight = new THREE.DirectionalLight(0xffcda9, 2.0);
+
+    const rimLight = new THREE.DirectionalLight(0xffcda9, 1.6);
     rimLight.position.set(1.5, 3.0, -3.0);
     scene.add(rimLight);
 
     const headGroup = new THREE.Group();
     scene.add(headGroup);
 
-    const TEX_W = 2048, TEX_H = 1024;
+    // ============================================================
+    // إعداد القماش (Canvas) للنقش على السطح
+    // ============================================================
+    const TEX_W = 2048, TEX_H = 2048; // مربع لتفادي تشوه الصورة
     const skinCanvas = document.createElement('canvas');
-    skinCanvas.width = TEX_W; skinCanvas.height = TEX_H;
+    skinCanvas.width = TEX_W;
+    skinCanvas.height = TEX_H;
     const skinCtx = skinCanvas.getContext('2d');
+
     let currentPhoto = null;
     let headTexture;
 
-    function smoothstep(a, b, x) {
-      const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1);
-      return t * t * (3 - 2 * t);
-    }
-
+    // رسم الصورة لتغطي مساحة معينة (cover)
     function drawCover(ctx, image, x, y, width, height) {
       const scale = Math.max(width / image.width, height / image.height);
       const sw = width / scale, sh = height / scale;
@@ -195,6 +208,7 @@
       ctx.drawImage(image, sx, sy, sw, sh, x, y, width, height);
     }
 
+    // استخراج لون خلفية الرأس من أعلى الصورة
     function sampleBackColor(image) {
       try {
         const sample = document.createElement('canvas');
@@ -207,47 +221,62 @@
           if (pixels[i + 3] < 20) continue;
           r += pixels[i]; g += pixels[i + 1]; b += pixels[i + 2]; count++;
         }
-        if (!count) return '#473b37';
+        if (!count) return '#4a3e38';
         return `rgb(${Math.round(r/count)},${Math.round(g/count)},${Math.round(b/count)})`;
       } catch {
-        return '#473b37';
+        return '#4a3e38';
       }
     }
 
+    // ============================================================
+    // رسم النقش على القماش
+    // الصورة تغطي الوجه بالكامل + امتداد خفيف للجوانب
+    // ============================================================
     function paintHeadTexture() {
-      const backTone = currentPhoto ? sampleBackColor(currentPhoto) : '#473b37';
+      const backTone = currentPhoto ? sampleBackColor(currentPhoto) : '#4a3e38';
       skinCtx.fillStyle = backTone;
       skinCtx.fillRect(0, 0, TEX_W, TEX_H);
+
+      // تدرج خفيف للعمق
       const shade = skinCtx.createLinearGradient(0, 0, 0, TEX_H);
-      shade.addColorStop(0, 'rgba(0,0,0,.15)');
-      shade.addColorStop(.48, 'rgba(255,255,255,.04)');
-      shade.addColorStop(1, 'rgba(0,0,0,.10)');
+      shade.addColorStop(0, 'rgba(255,255,255,.06)');
+      shade.addColorStop(.5, 'rgba(0,0,0,0)');
+      shade.addColorStop(1, 'rgba(0,0,0,.12)');
       skinCtx.fillStyle = shade;
       skinCtx.fillRect(0, 0, TEX_W, TEX_H);
 
       if (currentPhoto) {
-        // Map the complete portrait from crown to chin over the entire front of the head.
-        // Its edge pixels continue around the temples; there is no exposed skin-colored rim.
-        const frontX = TEX_W * .3125;
-        const frontW = TEX_W * .375;
-        const sideW = TEX_W * .0625;
+        // ✅ الصورة تغطي أكثر من نصف القماش بقليل
+        // الوجه الأمامي = الجزء الأوسط من UV (u من 0.25 إلى 0.75)
+        // الصورة تغطي من u=0.22 إلى u=0.78 (56% من العرض) لتضمن تغطية كاملة
+        const frontX = TEX_W * 0.22;
+        const frontW = TEX_W * 0.56;
+
+        // طبقة الصورة
         const imageLayer = document.createElement('canvas');
-        imageLayer.width = TEX_W; imageLayer.height = TEX_H;
+        imageLayer.width = TEX_W;
+        imageLayer.height = TEX_H;
         const imageCtx = imageLayer.getContext('2d');
+
+        // رسم الصورة لتغطي المنطقة الأمامية بالكامل (تمتد من أعلى إلى أسفل)
         drawCover(imageCtx, currentPhoto, frontX, 0, frontW, TEX_H);
         skinCtx.drawImage(imageLayer, frontX, 0, frontW, TEX_H, frontX, 0, frontW, TEX_H);
 
-        // Continue the portrait's temple/hair-edge tones onto both sides, fading into a
-        // tone sampled from the upper portrait so the back of the skull stays coherent.
+        // امتداد لوني على الجانبين بلون الشعر/الحدود
+        const sideW = TEX_W * 0.06;
         for (const side of ['left', 'right']) {
-          const left = side === 'left';
+          const isLeft = side === 'left';
           const band = document.createElement('canvas');
-          band.width = Math.ceil(sideW); band.height = TEX_H;
+          band.width = Math.ceil(sideW);
+          band.height = TEX_H;
           const bandCtx = band.getContext('2d');
-          const srcX = left ? frontX : frontX + frontW - 1;
+
+          const srcX = isLeft ? frontX : frontX + frontW - 1;
           bandCtx.drawImage(imageLayer, srcX, 0, 1, TEX_H, 0, 0, band.width, TEX_H);
+
+          // تلاشي
           const fade = bandCtx.createLinearGradient(0, 0, band.width, 0);
-          if (left) {
+          if (isLeft) {
             fade.addColorStop(0, 'rgba(255,255,255,0)');
             fade.addColorStop(1, 'rgba(255,255,255,1)');
           } else {
@@ -257,10 +286,12 @@
           bandCtx.globalCompositeOperation = 'destination-in';
           bandCtx.fillStyle = fade;
           bandCtx.fillRect(0, 0, band.width, TEX_H);
-          const destX = left ? frontX - sideW : frontX + frontW;
+
+          const destX = isLeft ? frontX - sideW : frontX + frontW;
           skinCtx.drawImage(band, destX, 0, sideW, TEX_H);
         }
       }
+
       if (headTexture) headTexture.needsUpdate = true;
     }
 
@@ -269,44 +300,104 @@
     headTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     paintHeadTexture();
 
-    // Inverted-oval head: full forehead/cheeks taper smoothly into a rounded chin.
+    // ============================================================
+    // ✅ الشكل البيضوي المقلوب + أصغر من حجم الصورة
+    //
+    // ملاحظة مهمة:
+    // - UV mapping الحالي يضع صورة الوجه في u=0.22..0.78
+    // - الشكل البيضوي يشغل u=0.0..1.0 من الهندسة
+    // - لضمان تغطية كاملة، نستخدم نصف قطر عرض أوسع قليلاً
+    //   بحيث يظهر الوجه على كامل الواجهة الأمامية
+    // ============================================================
     function makeHeadGeometry() {
-      const around = 192, vertical = 160;
-      const positions = [], uvs = [], indices = [];
-      const rx = .97, rz = .76, halfHeight = 1.36;
+      const around = 192;
+      const vertical = 200;
+
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      // ✅ نصف الأبعاد: العرض والعمق
+      const rx = 1.0;   // عرض الرأس
+      const rz = 0.78;  // عمق الرأس
+      const halfHeight = 1.35;
+
       for (let j = 0; j <= vertical; j++) {
         const v = j / vertical;
-        const y = (v - .5) * 2 * halfHeight;
+
+        // ✅ الإحداثي الرأسي: y = -halfHeight (أسفل) → +halfHeight (أعلى)
+        const y = (v - 0.5) * 2 * halfHeight;
         const yn = y / halfHeight;
-        const ring = Math.pow(Math.max(0, 1 - yn * yn), .52);
-        const lowerJaw = 1 - smoothstep(-.96, -.08, y);
-        const jawWidth = 1 - .36 * lowerJaw;
-        const upperCranium = 1 + .045 * Math.exp(-Math.pow((y - .32) / .58, 2));
-        const cheekFullness = 1 + .025 * Math.exp(-Math.pow((y - .02) / .34, 2));
+
+        // نصف قطر المقطع الأفقي (يعتمد على y)
+        // الشكل البيضوي المقلوب:
+        //   - عند الأعلى (yn = +1): عريض جداً (قمة الرأس)
+        //   - في المنتصف (yn = 0): العرض الكامل
+        //   - عند الأسفل (yn = -1): يضيق تدريجياً نحو الذقن
+        let ring;
+        if (yn >= 0) {
+          // النصف العلوي (الجمجمة): شكل شبه كروي عريض
+          // قمة الرأس عريضة ومسطحة قليلاً
+          ring = Math.pow(Math.max(0, 1 - yn * yn), 0.42);
+        } else {
+          // النصف السفلي (الفك): يضيق بشكل أسرع قليلاً
+          // الذقن مدبب أكثر من قمة الرأس
+          ring = Math.pow(Math.max(0, 1 - yn * yn), 0.62);
+        }
+
+        // ✅ نحفظ النسب الحقيقية بدون تصغير الشكل عن الصورة
+        // لكن نجعل الشكل أصغر قليلاً من حدود UV القصوى
+        // حتى لا تظهر أي حواف مكشوفة
+        const widthFactor = ring;
+
         for (let i = 0; i <= around; i++) {
           const u = i / around;
-          const theta = (u - .5) * Math.PI * 2;
-          const s = Math.sin(theta), c = Math.cos(theta);
-          const x = rx * ring * jawWidth * upperCranium * cheekFullness * s;
-          let z = rz * ring * (1 + .025 * smoothstep(-.5, .8, y)) * c;
+          const theta = (u - 0.5) * Math.PI * 2;
+          const s = Math.sin(theta);
+          const c = Math.cos(theta);
+
+          // ✅ x: نصف العرض * نصف قطر المقطع * معامل الضيق
+          const x = rx * widthFactor * s;
+
+          // ✅ z: نصف العمق * نصف قطر المقطع
+          // نضيف بعض الاختلاف حسب الجبهة/الفك
+          let z = rz * widthFactor * c;
+
+          // ✅ إضافة تفاصيل الوجه الدقيقة (أنف، وجنتين، فك)
+          // تُطبق فقط على الجهة الأمامية (c > 0 يعني z موجب = أمام)
           if (c > 0) {
             const front = Math.pow(c, 5);
-            const g = (cx, cy, wx, wy) => Math.exp(-Math.pow((x-cx)/wx, 2) - Math.pow((y-cy)/wy, 2));
+            const g = (cx, cy, wx, wy) =>
+              Math.exp(
+                -Math.pow((x - cx) / wx, 2) -
+                Math.pow((y - cy) / wy, 2)
+              );
+
             let relief = 0;
-            // Nose bridge and tip; cheek, brow, chin, and subtle eye-socket relief.
-            // Keep facial relief shallow so the uploaded portrait is not warped.
-            relief += .035 * g(0, .02, .11, .40);
-            relief += .055 * g(0, -.23, .16, .18);
-            relief += .012 * (g(-.115, -.30, .055, .045) + g(.115, -.30, .055, .045));
-            relief += .018 * (g(-.28, .47, .22, .09) + g(.28, .47, .22, .09));
-            relief -= .012 * (g(-.28, .31, .19, .105) + g(.28, .31, .19, .105));
-            relief += .028 * (g(-.43, -.05, .23, .20) + g(.43, -.05, .23, .20));
-            relief += .012 * g(0, -.48, .27, .11);
-            relief += .028 * g(0, -.91, .30, .18);
+
+            // الجبهة
+            relief += 0.028 * g(0, 0.55, 0.6, 0.35);
+
+            // الأنف (جسر + رأس الأنف)
+            relief += 0.032 * g(0, 0.10, 0.09, 0.35);   // الجسر
+            relief += 0.052 * g(0, -0.18, 0.14, 0.14);  // رأس الأنف
+
+            // الوجنتين
+            relief += 0.025 * (g(-0.45, -0.05, 0.22, 0.22) + g(0.45, -0.05, 0.22, 0.22));
+
+            // الفك السفلي
+            relief += 0.018 * g(0, -0.75, 0.35, 0.20);
+
+            // تجويف العين (انخفاض خفيف)
+            relief -= 0.010 * (g(-0.28, 0.28, 0.17, 0.10) + g(0.28, 0.28, 0.17, 0.10));
+
             z += front * relief;
           }
+
           positions.push(x, y, z);
           uvs.push(u, v);
+
+          // بناء المثلثات
           if (j < vertical && i < around) {
             const a = j * (around + 1) + i;
             const b = a + around + 1;
@@ -314,6 +405,7 @@
           }
         }
       }
+
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
       geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
@@ -325,26 +417,37 @@
     const skinMaterial = new THREE.MeshStandardMaterial({
       map: headTexture,
       color: 0xffffff,
-      roughness: .83,
+      roughness: 0.82,
       metalness: 0,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide  // ✅ FrontSide فقط لأن الشكل مغلق
     });
+
     const head = new THREE.Mesh(makeHeadGeometry(), skinMaterial);
     headGroup.add(head);
 
-    let rotY = 0, rotX = 0, targetRotY = 0, targetRotX = 0;
-    const MAX_Y = 38, MAX_X = 24, SMOOTH = .12;
+    // ============================================================
+    // دوران
+    // ============================================================
+    let rotY = 0, rotX = 0;
+    let targetRotY = 0, targetRotX = 0;
+
+    const MAX_Y = 38, MAX_X = 24;
+    const SMOOTH = 0.12;
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-    let dragging = false, startX = 0, startY = 0, startRotY = 0, startRotX = 0;
+
+    let dragging = false;
+    let startX = 0, startY = 0;
+    let startRotY = 0, startRotX = 0;
 
     function resize() {
       const width = Math.max(1, container.clientWidth);
       const height = Math.max(1, container.clientHeight);
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
-      camera.position.z = width < 360 ? 6.0 : 5.45;
+      camera.position.z = width < 360 ? 6.2 : 5.6;
       camera.updateProjectionMatrix();
     }
+
     new ResizeObserver(resize).observe(container);
     window.addEventListener('resize', resize);
     resize();
@@ -353,43 +456,72 @@
       requestAnimationFrame(animate);
       rotY += (targetRotY - rotY) * SMOOTH;
       rotX += (targetRotX - rotX) * SMOOTH;
-      headGroup.rotation.set(THREE.MathUtils.degToRad(rotX), THREE.MathUtils.degToRad(rotY), 0);
+      headGroup.rotation.set(
+        THREE.MathUtils.degToRad(rotX),
+        THREE.MathUtils.degToRad(rotY),
+        0
+      );
       renderer.render(scene, camera);
     }
     animate();
 
-    document.getElementById('leftBtn').addEventListener('click', () => { targetRotY = clamp(targetRotY - 8, -MAX_Y, MAX_Y); });
-    document.getElementById('rightBtn').addEventListener('click', () => { targetRotY = clamp(targetRotY + 8, -MAX_Y, MAX_Y); });
-    document.getElementById('upBtn').addEventListener('click', () => { targetRotX = clamp(targetRotX + 6, -MAX_X, MAX_X); });
-    document.getElementById('resetBtn').addEventListener('click', () => { targetRotY = 0; targetRotX = 0; });
+    // ============================================================
+    // أزرار التحكم
+    // ============================================================
+    document.getElementById('leftBtn').addEventListener('click', () => {
+      targetRotY = clamp(targetRotY - 8, -MAX_Y, MAX_Y);
+    });
+    document.getElementById('rightBtn').addEventListener('click', () => {
+      targetRotY = clamp(targetRotY + 8, -MAX_Y, MAX_Y);
+    });
+    document.getElementById('upBtn').addEventListener('click', () => {
+      targetRotX = clamp(targetRotX + 6, -MAX_X, MAX_X);
+    });
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      targetRotY = 0;
+      targetRotX = 0;
+    });
 
+    // ============================================================
+    // السحب بالفأرة/اللمس
+    // ============================================================
     container.addEventListener('pointerdown', (event) => {
       if (event.target !== renderer.domElement) return;
       dragging = true;
-      startX = event.clientX; startY = event.clientY;
-      startRotY = targetRotY; startRotX = targetRotX;
+      startX = event.clientX;
+      startY = event.clientY;
+      startRotY = targetRotY;
+      startRotX = targetRotX;
       container.setPointerCapture?.(event.pointerId);
       event.preventDefault();
     });
+
     container.addEventListener('pointermove', (event) => {
       if (!dragging) return;
-      targetRotY = clamp(startRotY + (event.clientX - startX) * .48, -MAX_Y, MAX_Y);
-      targetRotX = clamp(startRotX - (event.clientY - startY) * .38, -MAX_X, MAX_X);
+      targetRotY = clamp(startRotY + (event.clientX - startX) * 0.48, -MAX_Y, MAX_Y);
+      targetRotX = clamp(startRotX - (event.clientY - startY) * 0.38, -MAX_X, MAX_X);
     });
+
     const stopDrag = () => { dragging = false; };
     container.addEventListener('pointerup', stopDrag);
     container.addEventListener('pointercancel', stopDrag);
     container.addEventListener('lostpointercapture', stopDrag);
 
+    // ============================================================
+    // رفع صورة
+    // ============================================================
     let userUploadedPhoto = false;
+
     upload.addEventListener('change', (event) => {
       const file = event.target.files?.[0];
       if (!file) return;
+
       if (!file.type.startsWith('image/')) {
         alert('الرجاء اختيار ملف صورة صالح');
         upload.value = '';
         return;
       }
+
       const image = new Image();
       image.onload = () => {
         userUploadedPhoto = true;
@@ -405,11 +537,14 @@
       image.src = URL.createObjectURL(file);
     });
 
-    // Keep the original sample portrait as an optional starting texture; local upload works offline afterward.
+    // صورة افتراضية
     const sample = new Image();
     sample.crossOrigin = 'anonymous';
     sample.onload = () => {
-      if (!userUploadedPhoto) { currentPhoto = sample; paintHeadTexture(); }
+      if (!userUploadedPhoto) {
+        currentPhoto = sample;
+        paintHeadTexture();
+      }
     };
     sample.onerror = () => {};
     sample.src = 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=600&auto=format&fit=crop&q=80&ixlib=rb-4.0.3';
@@ -422,4 +557,3 @@
   </script>
 </body>
 </html>
-
