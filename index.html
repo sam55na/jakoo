@@ -40,16 +40,6 @@
     }
     .face-container:active { cursor: grabbing; }
     .face-container canvas { display: block; width: 100%; height: 100%; outline: none; }
-    .ground-shadow {
-      position: absolute;
-      left: 50%; bottom: 2%; z-index: -1;
-      width: 54%; height: 30px;
-      transform: translateX(-50%);
-      border-radius: 50%;
-      background: radial-gradient(ellipse, rgba(0,0,0,.64), transparent 72%);
-      filter: blur(11px);
-      pointer-events: none;
-    }
     .controls {
       margin-top: 20px;
       display: flex;
@@ -133,9 +123,7 @@
 </head>
 <body>
   <main class="scene" aria-label="عارض رأس إنسان ثلاثي الأبعاد">
-    <div class="face-container" id="faceContainer" role="img" aria-label="رأس ثلاثي الأبعاد قابل للدوران">
-      <div class="ground-shadow"></div>
-    </div>
+    <div class="face-container" id="faceContainer" role="img" aria-label="رأس بيضوي ثلاثي الأبعاد قابل للدوران">
   </main>
 
   <nav class="controls" aria-label="أدوات تدوير الرأس">
@@ -151,7 +139,7 @@
       <input type="file" id="imageUpload" accept="image/*">
     </label>
   </section>
-  <p class="hint">اسحب الرأس بالفأرة أو اللمس لتدويره، أو استخدم الأزرار. للحصول على أفضل نتيجة، ارفع صورة أمامية واضحة للوجه بإضاءة جيدة.</p>
+  <p class="hint">رأس بيضوي فقط بلا أذنين أو رقبة. اسحب لتدويره وارفع صورة أمامية واضحة ليغطي ملمسها كامل واجهة الرأس.</p>
   <p class="status" id="status" aria-live="polite"></p>
 
   <script type="module">
@@ -281,24 +269,25 @@
     headTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
     paintHeadTexture();
 
-    // Parametric skull surface: broad cranium, narrower jaw, and gentle facial relief.
+    // Inverted-oval head: full forehead/cheeks taper smoothly into a rounded chin.
     function makeHeadGeometry() {
       const around = 192, vertical = 160;
       const positions = [], uvs = [], indices = [];
-      const rx = .88, rz = .73, halfHeight = 1.38;
+      const rx = .97, rz = .76, halfHeight = 1.36;
       for (let j = 0; j <= vertical; j++) {
         const v = j / vertical;
         const y = (v - .5) * 2 * halfHeight;
         const yn = y / halfHeight;
-        const ring = Math.pow(Math.max(0, 1 - yn * yn), .56);
-        const lowerJaw = 1 - smoothstep(-1.12, -.12, y);
-        const jawWidth = 1 - .24 * lowerJaw;
-        const cheekFullness = 1 + .025 * Math.exp(-Math.pow((y + .10) / .38, 2));
+        const ring = Math.pow(Math.max(0, 1 - yn * yn), .52);
+        const lowerJaw = 1 - smoothstep(-.96, -.08, y);
+        const jawWidth = 1 - .36 * lowerJaw;
+        const upperCranium = 1 + .045 * Math.exp(-Math.pow((y - .32) / .58, 2));
+        const cheekFullness = 1 + .025 * Math.exp(-Math.pow((y - .02) / .34, 2));
         for (let i = 0; i <= around; i++) {
           const u = i / around;
           const theta = (u - .5) * Math.PI * 2;
           const s = Math.sin(theta), c = Math.cos(theta);
-          const x = rx * ring * jawWidth * cheekFullness * s;
+          const x = rx * ring * jawWidth * upperCranium * cheekFullness * s;
           let z = rz * ring * (1 + .025 * smoothstep(-.5, .8, y)) * c;
           if (c > 0) {
             const front = Math.pow(c, 5);
@@ -341,30 +330,7 @@
       side: THREE.DoubleSide
     });
     const head = new THREE.Mesh(makeHeadGeometry(), skinMaterial);
-    head.position.y = .12;
     headGroup.add(head);
-
-    // Ears and a short neck add recognizable side and lower-head volume.
-    const earMaterial = new THREE.MeshStandardMaterial({ color: 0xb9876c, roughness: .9 });
-    const earInnerMaterial = new THREE.MeshStandardMaterial({ color: 0x805846, roughness: 1 });
-    const earGeo = new THREE.SphereGeometry(1, 40, 32);
-    for (const side of [-1, 1]) {
-      const ear = new THREE.Mesh(earGeo, earMaterial);
-      ear.scale.set(.19, .31, .115);
-      ear.position.set(side * .89, .08, -.005);
-      headGroup.add(ear);
-      const concha = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20), earInnerMaterial);
-      concha.scale.set(.075, .17, .025);
-      concha.position.set(side * .95, .08, .094);
-      headGroup.add(concha);
-    }
-    const neck = new THREE.Mesh(
-      new THREE.CylinderGeometry(.39, .49, .72, 64, 1, false),
-      new THREE.MeshStandardMaterial({ color: 0xb98b70, roughness: .88 })
-    );
-    neck.position.set(0, -1.45, -.20);
-    neck.scale.z = .77;
-    headGroup.add(neck);
 
     let rotY = 0, rotX = 0, targetRotY = 0, targetRotX = 0;
     const MAX_Y = 38, MAX_X = 24, SMOOTH = .12;
@@ -376,7 +342,7 @@
       const height = Math.max(1, container.clientHeight);
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
-      camera.position.z = width < 360 ? 6.7 : 6.25;
+      camera.position.z = width < 360 ? 6.0 : 5.45;
       camera.updateProjectionMatrix();
     }
     new ResizeObserver(resize).observe(container);
