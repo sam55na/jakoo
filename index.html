@@ -22,6 +22,7 @@
       height: min(600px, 70vh);
       cursor: grab;
       touch-action: none;
+      position: relative;
       filter: drop-shadow(0 30px 40px rgba(0,0,0,.5));
     }
     .scene:active { cursor: grabbing; }
@@ -29,7 +30,9 @@
     .controls {
       margin-top: 20px;
       display: flex;
+      flex-wrap: wrap;
       gap: 12px;
+      justify-content: center;
       padding: 13px 20px;
       border-radius: 60px;
       background: rgba(20,24,33,.72);
@@ -50,14 +53,16 @@
     .controls button:hover { background: rgba(255,255,255,.18); transform: scale(1.03); }
     .upload {
       margin-top: 16px;
-      padding: 10px 24px;
+      padding: 12px 26px;
       border-radius: 40px;
       color: white;
       background: linear-gradient(135deg,#6a5acd,#8a7bdd);
       font-weight: 600;
       cursor: pointer;
       border: 1px solid rgba(255,255,255,.2);
+      box-shadow: 0 4px 15px rgba(106,90,205,.4);
     }
+    .upload:hover { transform: translateY(-2px); }
     .upload input { display: none; }
     .status {
       margin-top: 12px;
@@ -76,6 +81,7 @@
       color: #eaeef5;
       font-size: 1rem;
       pointer-events: none;
+      z-index: 10;
     }
   </style>
 </head>
@@ -97,8 +103,7 @@
   </label>
 
   <p class="status" id="status">
-    💡 يتم استخدام نموذج رأس إنسان ثلاثي الأبعاد حقيقي.
-    ارفع صورة وجهك وسيتم تطبيقها على الوجه بشكل واقعي.
+    💡 ارفع صورة وجهك (مربعة تقريباً - 1:1 مثالية) وسيتم تطبيقها على الرأس مباشرة.
   </p>
 
   <script type="importmap">
@@ -113,7 +118,6 @@
   <script type="module">
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
     const sceneEl = document.getElementById('scene');
     const loadingEl = document.getElementById('loading');
@@ -132,7 +136,8 @@
       0.1,
       100
     );
-    camera.position.set(0, 0.1, 4.2);
+    // ✅ الكاميرا بعيدة بما يكفي لرؤية الرأس كاملاً
+    camera.position.set(0, 0, 3.5);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -146,11 +151,11 @@
     sceneEl.appendChild(renderer.domElement);
 
     // ============================================================
-    // إضاءة احترافية (Studio lighting)
+    // إضاءة
     // ============================================================
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.2));
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x444455, 1.3));
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
     keyLight.position.set(-2, 3, 4);
     scene.add(keyLight);
 
@@ -162,7 +167,7 @@
     rimLight.position.set(1, 2, -3);
     scene.add(rimLight);
 
-    const backLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const backLight = new THREE.DirectionalLight(0xffffff, 0.6);
     backLight.position.set(0, 1, -5);
     scene.add(backLight);
 
@@ -173,15 +178,13 @@
     scene.add(headGroup);
 
     // ============================================================
-    // ✅ تحميل نموذج رأس GLB حقيقي
-    //
-    // نستخدم نموذج LeePerrySmith — رأس إنسان كامل بتفاصيل عالية
-    // يحتوي على UV map جاهز لتطبيق أي صورة وجه
+    // تحميل نموذج LeePerrySmith
     // ============================================================
     const MODEL_URL = 'https://threejs.org/examples/models/gltf/LeePerrySmith/LeePerrySmith.glb';
 
     let headModel = null;
-    let originalFaceTexture = null;
+    let faceMeshes = [];      // ✅ نحفظ كل meshes الوجه
+    let originalMap = null;
 
     const loader = new GLTFLoader();
 
@@ -190,40 +193,43 @@
       (gltf) => {
         headModel = gltf.scene;
 
-        // ضبط حجم النموذج
-        headModel.scale.set(1, 1, 1);
-        headModel.position.set(0, 0, 0);
+        // ============================================================
+        // ✅ ضبط الحجم والموضع — الرأس يظهر بحجم مناسب
+        // ============================================================
+        // نموذج LeePerrySmith كبير جداً في الأصل، نُصغّره
+        headModel.scale.setScalar(0.35);
+        headModel.position.set(0, -0.1, 0);
 
-        // ✅ البحث عن الوجه في النموذج
+        // ✅ البحث عن جميع meshes الوجه وتخزينها
         headModel.traverse((child) => {
           if (child.isMesh && child.material) {
+            faceMeshes.push(child);
+
             const materials = Array.isArray(child.material)
               ? child.material
               : [child.material];
 
             materials.forEach((mat) => {
-              // حفظ النقش الأصلي
-              if (mat.map && !originalFaceTexture) {
-                originalFaceTexture = mat.map;
+              // حفظ النقش الأصلي لأول مرة
+              if (mat.map && !originalMap) {
+                originalMap = mat.map;
               }
-
-              // تحسين المظهر
-              mat.roughness = 0.75;
+              // ضبط المظهر
+              mat.roughness = 0.78;
               mat.metalness = 0.0;
-              if ('clearcoat' in mat) mat.clearcoat = 0.05;
+              mat.needsUpdate = true;
             });
           }
         });
 
-        // ✅ إضافة النموذج للمجموعة
         headGroup.add(headModel);
 
-        // إخفاء رسالة التحميل
         loadingEl.style.display = 'none';
-        status.textContent = '✅ الرأس جاهز. ارفع صورة وجهك لتطبيقها.';
+        status.textContent = `✅ الرأس جاهز (${faceMeshes.length} mesh). ارفع صورة وجهك.`;
+        console.log('عدد meshes الوجه:', faceMeshes.length);
+        console.log('قائمة المواد:', faceMeshes.map(m => m.material.name || 'unnamed'));
       },
       (progress) => {
-        // شريط التقدم
         if (progress.total > 0) {
           const percent = Math.round((progress.loaded / progress.total) * 100);
           loadingEl.textContent = `جاري التحميل... ${percent}%`;
@@ -232,15 +238,13 @@
       (error) => {
         console.error(error);
         loadingEl.textContent = 'تعذر تحميل النموذج.';
-        status.textContent = '❌ فشل تحميل نموذج الرأس. تحقق من الاتصال بالإنترنت.';
+        status.textContent = '❌ فشل تحميل النموذج.';
       }
     );
 
     // ============================================================
-    // رفع صورة الوجه
-    //
-    // نموذج LeePerrySmith له UV map مخصص للوجه
-    // نطبّق صورة المستخدم مباشرة كـ texture
+    // ✅ تطبيق صورة الوجه على كل مواد النموذج
+    // (بدون أي شرط على اسم المادة)
     // ============================================================
     faceUpload.addEventListener('change', (event) => {
       const file = event.target.files?.[0];
@@ -258,24 +262,25 @@
           texture.wrapT = THREE.RepeatWrapping;
           texture.needsUpdate = true;
 
-          // ✅ تطبيق الصورة على مواد الرأس
-          if (headModel) {
-            headModel.traverse((child) => {
-              if (child.isMesh && child.material) {
-                const materials = Array.isArray(child.material)
-                  ? child.material
-                  : [child.material];
-                materials.forEach((mat) => {
-                  if (mat.map || mat.name.includes('face') || mat.name.includes('skin')) {
-                    mat.map = texture;
-                    mat.needsUpdate = true;
-                  }
-                });
-              }
+          // ✅ تطبيق الصورة على كل mesh موجود
+          if (faceMeshes.length > 0) {
+            faceMeshes.forEach((mesh) => {
+              const materials = Array.isArray(mesh.material)
+                ? mesh.material
+                : [mesh.material];
+              materials.forEach((mat) => {
+                mat.map = texture;
+                mat.needsUpdate = true;
+              });
             });
 
-            status.textContent = '✅ تم تطبيق صورتك على الرأس. اسحب لتدويره.';
+            status.textContent = `✅ تم تطبيق صورتك على ${faceMeshes.length} سطح. اسحب لتدويره.`;
+          } else {
+            status.textContent = '⚠️ لم يتم العثور على meshes.';
           }
+        };
+        img.onerror = () => {
+          status.textContent = '❌ تعذر قراءة الصورة.';
         };
         img.src = e.target.result;
       };
@@ -283,7 +288,7 @@
     });
 
     // ============================================================
-    // دوران سلس بالماوس/اللمس
+    // دوران سلس
     // ============================================================
     let isDragging = false;
     let prevX = 0, prevY = 0;
@@ -313,12 +318,13 @@
 
     const stopDrag = (e) => {
       isDragging = false;
-      if (e && e.pointerId) sceneEl.releasePointerCapture(e.pointerId);
+      if (e && e.pointerId) {
+        try { sceneEl.releasePointerCapture(e.pointerId); } catch(_) {}
+      }
     };
     sceneEl.addEventListener('pointerup', stopDrag);
     sceneEl.addEventListener('pointercancel', stopDrag);
 
-    // أزرار
     document.getElementById('leftBtn').addEventListener('click', () => {
       targetRotY = clamp(targetRotY - 0.2, -MAX_Y, MAX_Y);
     });
@@ -338,22 +344,14 @@
     // ============================================================
     function animate() {
       requestAnimationFrame(animate);
-
-      // انتقال سلس
       rotY += (targetRotY - rotY) * SMOOTH;
       rotX += (targetRotX - rotX) * SMOOTH;
-
-      // تدوير المجموعة
       headGroup.rotation.y = rotY;
       headGroup.rotation.x = rotX;
-
       renderer.render(scene, camera);
     }
     animate();
 
-    // ============================================================
-    // تعديل الحجم عند تغيير النافذة
-    // ============================================================
     function resize() {
       const w = sceneEl.clientWidth;
       const h = sceneEl.clientHeight;
@@ -364,7 +362,6 @@
     new ResizeObserver(resize).observe(sceneEl);
     resize();
 
-    // تنظيف
     window.addEventListener('beforeunload', () => {
       renderer.dispose();
     });
