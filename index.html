@@ -115,7 +115,7 @@
     }
     .upload-status.ready { color: #7ed4a8; }
     .hint {
-      max-width: min(560px, 92vw);
+      max-width: min(580px, 92vw);
       margin-top: 14px;
       padding: 9px 17px;
       border-radius: 30px;
@@ -137,7 +137,7 @@
 </head>
 <body>
   <main class="scene" aria-label="عارض رأس إنسان ثلاثي الأبعاد">
-    <div class="face-container" id="faceContainer" role="img" aria-label="رأس بيضوي ثلاثي الأبعاد قابل للدوران"></div>
+    <div class="face-container" id="faceContainer" role="img" aria-label="رأس ثلاثي الأبعاد قابل للدوران"></div>
   </main>
 
   <nav class="controls" aria-label="أدوات تدوير الرأس">
@@ -149,20 +149,20 @@
 
   <section class="upload-section" aria-label="رفع الصور">
     <label class="upload-label" for="faceUpload">
-      <span aria-hidden="true">🙂</span> صورة الوجه الأمامي
+      <span aria-hidden="true">🙂</span> صورة الوجه (PNG شفاف أفضل)
       <input type="file" id="faceUpload" accept="image/*">
     </label>
     <span class="upload-status" id="faceStatus">لم تُرفع</span>
 
     <label class="upload-label side" for="sideUpload">
-      <span aria-hidden="true">💇</span> صورة الشعر / الجوانب
+      <span aria-hidden="true">💇</span> صورة الجوانب (اختياري)
       <input type="file" id="sideUpload" accept="image/*">
     </label>
-    <span class="upload-status" id="sideStatus">لم تُرفع</span>
+    <span class="upload-status" id="sideStatus">اختياري</span>
   </section>
 
   <p class="hint">
-    كل صورة تُعرض بحجمها الطبيعي 100% بدون أي تكبير أو تمدد. الفراغات تُملأ بألوان مُستخرجة من أطراف الصورة نفسها.
+    💡 للحصول على أفضل نتيجة: ارفع صورة PNG بخلفية شفافة. تُعرض الصورة كاملة بدون أي تكبير أو تغيير.
   </p>
   <p class="status" id="status" aria-live="polite"></p>
 
@@ -190,284 +190,73 @@
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.02;
+    renderer.toneMappingExposure = 1.05;
     container.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
     camera.position.set(0, 0.05, 5.6);
 
-    scene.add(new THREE.HemisphereLight(0xe5edff, 0x453326, 1.85));
+    // إضاءة ناعمة
+    scene.add(new THREE.HemisphereLight(0xe5edff, 0x453326, 2.0));
 
     const keyLight = new THREE.DirectionalLight(0xffe2ca, 2.6);
     keyLight.position.set(-3.5, 4.5, 5.0);
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xc6d5ff, 1.15);
+    const fillLight = new THREE.DirectionalLight(0xc6d5ff, 1.2);
     fillLight.position.set(4.0, 1.0, 3.0);
     scene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0xffcda9, 1.5);
+    const rimLight = new THREE.DirectionalLight(0xffcda9, 1.6);
     rimLight.position.set(1.5, 3.0, -3.0);
     scene.add(rimLight);
 
+    // ✅ المجموعة الرئيسية التي تحتوي على كل شيء
     const headGroup = new THREE.Group();
     scene.add(headGroup);
 
     // ============================================================
-    // القماش
+    // ✅ خصائص الرأس — أبعاد متناسقة
     // ============================================================
-    const TEX_W = 2048;
-    const TEX_H = 2048;
-
-    const skinCanvas = document.createElement('canvas');
-    skinCanvas.width = TEX_W;
-    skinCanvas.height = TEX_H;
-    const skinCtx = skinCanvas.getContext('2d');
-
-    let facePhoto = null;
-    let sidePhoto = null;
-    let headTexture;
+    const HEAD_W = 1.55;       // عرض الرأس
+    const HEAD_H = 2.0;        // ارتفاع الرأس
+    const HEAD_D = 1.15;       // عمق الرأس
+    const FACE_PLANE_Z = 0.62; // مكان مستوى الوجه الأمامي (أمام المجسم)
 
     // ============================================================
-    // ✅ دالة رسم الصورة بحجمها الطبيعي 100%
-    //    - لا تكبير
-    //    - لا قص
-    //    - لا تمدد
-    //    - تُوسَّط داخل المستطيل الهدف
-    //    - إذا كانت أصغر من الهدف نترك الفراغ (سيُملأ لاحقاً)
+    // ✅ 1) مجسم الجمجمة (3D) — الشكل البيضوي المقلوب
+    //    هذا يعطي الحجم الحقيقي للرأس
     // ============================================================
-    function drawImageNatural(ctx, image, centerX, centerY, maxW, maxH) {
-      // نضع الصورة بنسبتها الأصلية، ونصغّرها فقط إذا كانت أكبر من المساحة
-      const imgAspect = image.width / image.height;
-      const boxAspect = maxW / maxH;
-
-      let drawW, drawH;
-      if (imgAspect >= boxAspect) {
-        // الصورة أعرض من الصندوق → العرض هو القيد
-        drawW = Math.min(image.width, maxW);
-        drawH = drawW / imgAspect;
-      } else {
-        // الصورة أطول → الارتفاع هو القيد
-        drawH = Math.min(image.height, maxH);
-        drawW = drawH * imgAspect;
-      }
-
-      const drawX = centerX - drawW / 2;
-      const drawY = centerY - drawH / 2;
-
-      ctx.drawImage(image, 0, 0, image.width, image.height, drawX, drawY, drawW, drawH);
-
-      return { x: drawX, y: drawY, w: drawW, h: drawH };
-    }
-
-    // ============================================================
-    // ✅ استخراج متوسط لون من حافة الصورة (علوي/سفلي/يمين/يسار)
-    // ============================================================
-    function getAverageColor(image, edge) {
-      const S = 128;
-      const c = document.createElement('canvas');
-      c.width = S; c.height = S;
-      const cx = c.getContext('2d', { willReadFrequently: true });
-      cx.drawImage(image, 0, 0, S, S);
-
-      let data;
-      if (edge === 'top')    data = cx.getImageData(0, 0, S, 2).data;
-      if (edge === 'bottom') data = cx.getImageData(0, S - 2, S, 2).data;
-      if (edge === 'left')   data = cx.getImageData(0, 0, 2, S).data;
-      if (edge === 'right')  data = cx.getImageData(S - 2, 0, 2, S).data;
-
-      let r = 0, g = 0, b = 0, n = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        if (data[i + 3] < 20) continue;
-        r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
-      }
-      if (n === 0) return { r: 60, g: 55, b: 50 };
-      return { r: Math.round(r/n), g: Math.round(g/n), b: Math.round(b/n) };
-    }
-
-    // ============================================================
-    // ✅ تعبئة مستطيل كامل بلون متدرج من عدة ألوان (لتغطية الفراغات)
-    // ============================================================
-    function fillRectWithGradient(ctx, x, y, w, h, colorTop, colorBottom) {
-      const grad = ctx.createLinearGradient(x, y, x, y + h);
-      grad.addColorStop(0, `rgb(${colorTop.r},${colorTop.g},${colorTop.b})`);
-      grad.addColorStop(1, `rgb(${colorBottom.r},${colorBottom.g},${colorBottom.b})`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(x, y, w, h);
-    }
-
-    // ============================================================
-    // ✅ رسم القماش
-    //
-    // التخطيط في UV:
-    //   u = 0.00 → 0.25 : منطقة الجانب الأيسر
-    //   u = 0.25 → 0.75 : منطقة الوجه الأمامي
-    //   u = 0.75 → 1.00 : منطقة الجانب الأيمن
-    // ============================================================
-    function paintHeadTexture() {
-      skinCtx.clearRect(0, 0, TEX_W, TEX_H);
-
-      // -------- الحدود --------
-      const faceX = TEX_W * 0.25;
-      const faceW = TEX_W * 0.50;
-      const sideLeftX = 0;
-      const sideLeftW = TEX_W * 0.25;
-      const sideRightX = TEX_W * 0.75;
-      const sideRightW = TEX_W * 0.25;
-
-      // ============================================================
-      // 1) الوجه الأمامي: تُرسم الصورة بحجمها الطبيعي في المنتصف
-      //    الفراغ حولها يُملأ بألوان من أطرافها
-      // ============================================================
-      if (facePhoto) {
-        const topColor = getAverageColor(facePhoto, 'top');
-        const bottomColor = getAverageColor(facePhoto, 'bottom');
-        const leftColor = getAverageColor(facePhoto, 'left');
-        const rightColor = getAverageColor(facePhoto, 'right');
-
-        // تعبئة المنطقة كاملة بتدرج علوي-سفلي (يمنع الفراغات)
-        fillRectWithGradient(skinCtx, faceX, 0, faceW, TEX_H, topColor, bottomColor);
-
-        // تدرج جانبي خفيف لتحسين الانسجام مع الجوانب
-        const gradL = skinCtx.createLinearGradient(faceX, 0, faceX + faceW * 0.15, 0);
-        gradL.addColorStop(0, `rgba(${leftColor.r},${leftColor.g},${leftColor.b},0.9)`);
-        gradL.addColorStop(1, `rgba(${leftColor.r},${leftColor.g},${leftColor.b},0)`);
-        skinCtx.fillStyle = gradL;
-        skinCtx.fillRect(faceX, 0, faceW * 0.15, TEX_H);
-
-        const gradR = skinCtx.createLinearGradient(faceX + faceW, 0, faceX + faceW * 0.85, 0);
-        gradR.addColorStop(0, `rgba(${rightColor.r},${rightColor.g},${rightColor.b},0.9)`);
-        gradR.addColorStop(1, `rgba(${rightColor.r},${rightColor.g},${rightColor.b},0)`);
-        skinCtx.fillStyle = gradR;
-        skinCtx.fillRect(faceX + faceW * 0.85, 0, faceW * 0.15, TEX_H);
-
-        // ✅ رسم الصورة نفسها بحجمها الطبيعي (بدون تكبير أو تمدد)
-        drawImageNatural(
-          skinCtx,
-          facePhoto,
-          faceX + faceW / 2,   // مركز أفقي
-          TEX_H / 2,            // مركز رأسي
-          faceW,                // الحد الأقصى للعرض
-          TEX_H                 // الحد الأقصى للارتفاع
-        );
-      } else {
-        skinCtx.fillStyle = '#3a3230';
-        skinCtx.fillRect(faceX, 0, faceW, TEX_H);
-      }
-
-      // ============================================================
-      // 2) صورة الجوانب: تُرسم بنفس الطريقة على الجانبين
-      //    مع انعكاس للجانب الأيمن
-      // ============================================================
-      if (sidePhoto) {
-        const topColor = getAverageColor(sidePhoto, 'top');
-        const bottomColor = getAverageColor(sidePhoto, 'bottom');
-
-        // الجانب الأيسر
-        fillRectWithGradient(skinCtx, sideLeftX, 0, sideLeftW, TEX_H, topColor, bottomColor);
-        drawImageNatural(
-          skinCtx,
-          sidePhoto,
-          sideLeftX + sideLeftW / 2,
-          TEX_H / 2,
-          sideLeftW,
-          TEX_H
-        );
-
-        // الجانب الأيمن (منعكس)
-        fillRectWithGradient(skinCtx, sideRightX, 0, sideRightW, TEX_H, topColor, bottomColor);
-        skinCtx.save();
-        skinCtx.translate(sideRightX + sideRightW, 0);
-        skinCtx.scale(-1, 1);
-        drawImageNatural(
-          skinCtx,
-          sidePhoto,
-          sideRightW / 2,
-          TEX_H / 2,
-          sideRightW,
-          TEX_H
-        );
-        skinCtx.restore();
-      } else if (facePhoto) {
-        // في حال عدم رفع صورة جوانب: نمدد ألوان أطراف الوجه على الجانبين
-        const leftColor = getAverageColor(facePhoto, 'left');
-        const rightColor = getAverageColor(facePhoto, 'right');
-        const topColor = getAverageColor(facePhoto, 'top');
-        const bottomColor = getAverageColor(facePhoto, 'bottom');
-
-        fillRectWithGradient(skinCtx, sideLeftX, 0, sideLeftW, TEX_H, topColor, bottomColor);
-        skinCtx.fillStyle = `rgba(${leftColor.r},${leftColor.g},${leftColor.b},0.85)`;
-        skinCtx.fillRect(sideLeftX, 0, sideLeftW, TEX_H);
-
-        fillRectWithGradient(skinCtx, sideRightX, 0, sideRightW, TEX_H, topColor, bottomColor);
-        skinCtx.fillStyle = `rgba(${rightColor.r},${rightColor.g},${rightColor.b},0.85)`;
-        skinCtx.fillRect(sideRightX, 0, sideRightW, TEX_H);
-      } else {
-        skinCtx.fillStyle = '#3a3230';
-        skinCtx.fillRect(sideLeftX, 0, sideLeftW, TEX_H);
-        skinCtx.fillRect(sideRightX, 0, sideRightW, TEX_H);
-      }
-
-      // ============================================================
-      // 3) دمج ناعم عند الحدود بين الوجه والجانبين
-      // ============================================================
-      if (facePhoto) {
-        const blendW = 24; // بكسل
-
-        const lc = getAverageColor(facePhoto, 'left');
-        const rc = getAverageColor(facePhoto, 'right');
-
-        // حدود اليسار
-        const gl = skinCtx.createLinearGradient(faceX - blendW, 0, faceX, 0);
-        gl.addColorStop(0, `rgba(${lc.r},${lc.g},${lc.b},0)`);
-        gl.addColorStop(1, `rgba(${lc.r},${lc.g},${lc.b},0.7)`);
-        skinCtx.fillStyle = gl;
-        skinCtx.fillRect(faceX - blendW, 0, blendW, TEX_H);
-
-        // حدود اليمين
-        const gr = skinCtx.createLinearGradient(faceX + faceW, 0, faceX + faceW + blendW, 0);
-        gr.addColorStop(0, `rgba(${rc.r},${rc.g},${rc.b},0.7)`);
-        gr.addColorStop(1, `rgba(${rc.r},${rc.g},${rc.b},0)`);
-        skinCtx.fillStyle = gr;
-        skinCtx.fillRect(faceX + faceW, 0, blendW, TEX_H);
-      }
-
-      if (headTexture) headTexture.needsUpdate = true;
-    }
-
-    headTexture = new THREE.CanvasTexture(skinCanvas);
-    headTexture.colorSpace = THREE.SRGBColorSpace;
-    headTexture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-    headTexture.wrapS = THREE.RepeatWrapping;
-    headTexture.wrapT = THREE.ClampToEdgeWrapping;
-    paintHeadTexture();
-
-    // ============================================================
-    // الشكل البيضوي المقلوب
-    // ============================================================
-    function makeHeadGeometry() {
-      const around = 192;
-      const vertical = 200;
+    function makeSkullGeometry() {
+      const around = 96;
+      const vertical = 120;
 
       const positions = [];
       const uvs = [];
       const indices = [];
 
-      const rx = 1.0;
-      const rz = 0.78;
-      const halfHeight = 1.35;
+      // الشكل: أعلى عريض (جمجمة) + أسفل مدبب (فك)
+      const rx = HEAD_W / 2;      // نصف العرض
+      const rz = HEAD_D / 2;      // نصف العمق
+      const ry = HEAD_H / 2;      // نصف الارتفاع
 
       for (let j = 0; j <= vertical; j++) {
         const v = j / vertical;
-        const y = (v - 0.5) * 2 * halfHeight;
-        const yn = y / halfHeight;
+        const y = (v - 0.5) * 2 * ry;
+        const yn = y / ry;
 
+        // ✅ الشكل البيضوي المقلوب
         let ring;
         if (yn >= 0) {
-          ring = Math.pow(Math.max(0, 1 - yn * yn), 0.42);
+          // النصف العلوي: عريض (جمجمة)
+          ring = Math.pow(Math.max(0, 1 - yn * yn), 0.40);
         } else {
-          ring = Math.pow(Math.max(0, 1 - yn * yn), 0.62);
+          // النصف السفلي: مدبب (فك)
+          ring = Math.pow(Math.max(0, 1 - yn * yn), 0.65);
         }
+
+        // ✅ إضافة تفاصيل الوجه للعمق (أنف، جبهة، فك)
+        const faceBulge = (yn > -0.5 && yn < 0.7) ? 0.10 * Math.exp(-Math.pow(yn / 0.5, 2)) : 0;
 
         for (let i = 0; i <= around; i++) {
           const u = i / around;
@@ -478,23 +267,9 @@
           const x = rx * ring * s;
           let z = rz * ring * c;
 
+          // نتوء أمامي (وجه)
           if (c > 0) {
-            const front = Math.pow(c, 5);
-            const g = (cx, cy, wx, wy) =>
-              Math.exp(
-                -Math.pow((x - cx) / wx, 2) -
-                Math.pow((y - cy) / wy, 2)
-              );
-
-            let relief = 0;
-            relief += 0.028 * g(0, 0.55, 0.6, 0.35);
-            relief += 0.032 * g(0, 0.10, 0.09, 0.35);
-            relief += 0.052 * g(0, -0.18, 0.14, 0.14);
-            relief += 0.025 * (g(-0.45, -0.05, 0.22, 0.22) + g(0.45, -0.05, 0.22, 0.22));
-            relief += 0.018 * g(0, -0.75, 0.35, 0.20);
-            relief -= 0.010 * (g(-0.28, 0.28, 0.17, 0.10) + g(0.28, 0.28, 0.17, 0.10));
-
-            z += front * relief;
+            z += faceBulge * Math.pow(c, 3);
           }
 
           positions.push(x, y, z);
@@ -516,16 +291,161 @@
       return geometry;
     }
 
-    const skinMaterial = new THREE.MeshStandardMaterial({
-      map: headTexture,
-      color: 0xffffff,
-      roughness: 0.82,
+    // ============================================================
+    // ✅ 2) مستوى الوجه الأمامي (Plane) — يحمل الصورة كاملة
+    //    منحني قليلاً ليتبع شكل الوجه
+    // ============================================================
+    function makeFacePlaneGeometry() {
+      const widthSegments = 40;
+      const heightSegments = 40;
+
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+
+      const w = HEAD_W * 0.98;   // عرض المستوى
+      const h = HEAD_H * 0.98;   // ارتفاع المستوى
+
+      for (let j = 0; j <= heightSegments; j++) {
+        const v = j / heightSegments;
+        const y = (0.5 - v) * h;  // من +h/2 إلى -h/2 (أعلى لأسفل)
+        const yn = y / (h / 2);
+
+        for (let i = 0; i <= widthSegments; i++) {
+          const u = i / widthSegments;
+          const x = (u - 0.5) * w;
+          const xn = x / (w / 2);
+
+          // ✅ انحناء بسيط على شكل قوس أفقي (ليتبع استدارة الوجه)
+          // وعمودي (ليتبع انحناء الجبهة/الذقن)
+          const curveH = Math.sqrt(Math.max(0, 1 - xn * xn * 0.35));
+          const curveV = Math.sqrt(Math.max(0, 1 - yn * yn * 0.15));
+
+          const z = FACE_PLANE_Z * curveH * curveV;
+
+          positions.push(x, y, z);
+          uvs.push(u, 1 - v);  // 1-v لعكس الاتجاه (الصورة من الأعلى)
+        }
+      }
+
+      for (let j = 0; j < heightSegments; j++) {
+        for (let i = 0; i < widthSegments; i++) {
+          const a = j * (widthSegments + 1) + i;
+          const b = a + widthSegments + 1;
+          indices.push(a, b, a + 1);
+          indices.push(a + 1, b, b + 1);
+        }
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+
+    // ============================================================
+    // ✅ 3) مجسم الجوانب (يحيط بالجزء الخلفي)
+    // ============================================================
+    function makeSideGeometry() {
+      // نستخدم نفس شكل الجمجمة لكن أصغر بقليل ونعطيه إزاحة خلفية
+      return makeSkullGeometry();
+    }
+
+    // ============================================================
+    // مواد الجمجمة (بدون صورة) — لون بشرة رمادي داكن طبيعي
+    // ============================================================
+    const skullMaterial = new THREE.MeshStandardMaterial({
+      color: 0x6b5a4e,
+      roughness: 0.85,
       metalness: 0,
       side: THREE.FrontSide
     });
 
-    const head = new THREE.Mesh(makeHeadGeometry(), skinMaterial);
-    headGroup.add(head);
+    const skull = new THREE.Mesh(makeSkullGeometry(), skullMaterial);
+    headGroup.add(skull);
+
+    // ============================================================
+    // ✅ مادة الوجه — تحمل الصورة كاملة مع شفافية
+    // ============================================================
+    const faceMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      roughness: 0.7,
+      metalness: 0,
+      transparent: true,
+      alphaTest: 0.01,
+      side: THREE.DoubleSide,
+      depthWrite: true
+    });
+
+    // ============================================================
+    // ✅ مادة الجوانب (اختيارية)
+    // ============================================================
+    const sideMaterial = new THREE.MeshStandardMaterial({
+      color: 0x8a7565,
+      roughness: 0.85,
+      metalness: 0,
+      transparent: true,
+      side: THREE.DoubleSide
+    });
+
+    // ============================================================
+    // ✅ تحميل صورة الوجه (بدون أي تعديل)
+    // ============================================================
+    let faceMesh = null;
+    let sideMesh = null;
+
+    function createFaceMesh(image) {
+      // إزالة القديم
+      if (faceMesh) {
+        headGroup.remove(faceMesh);
+        if (faceMesh.material.map) faceMesh.material.map.dispose();
+        faceMesh.material.dispose();
+        faceMesh.geometry.dispose();
+      }
+
+      // ✅ تحميل الصورة كنقش مباشر — بدون canvas وسيط
+      const texture = new THREE.Texture(image);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = true;
+      // ✅ مهم: الصورة تُعرض كما هي بدون قلب
+      texture.flipY = true;
+      texture.needsUpdate = true;
+
+      faceMaterial.map = texture;
+      faceMaterial.needsUpdate = true;
+
+      faceMesh = new THREE.Mesh(makeFacePlaneGeometry(), faceMaterial);
+      headGroup.add(faceMesh);
+    }
+
+    function createSideMesh(image) {
+      if (sideMesh) {
+        headGroup.remove(sideMesh);
+        if (sideMesh.material.map) sideMesh.material.map.dispose();
+        sideMesh.material.dispose();
+        sideMesh.geometry.dispose();
+      }
+
+      const texture = new THREE.Texture(image);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      texture.flipY = true;
+      texture.needsUpdate = true;
+
+      sideMaterial.map = texture;
+      sideMaterial.color.set(0xffffff);
+      sideMaterial.needsUpdate = true;
+
+      sideMesh = new THREE.Mesh(makeSideGeometry(), sideMaterial);
+      // الجوانب أكبر بقليل من الجمجمة لتغطيها
+      sideMesh.scale.set(1.02, 1.02, 1.02);
+      headGroup.add(sideMesh);
+    }
 
     // ============================================================
     // دوران
@@ -629,11 +549,10 @@
       handleUpload(
         file,
         (image) => {
-          facePhoto = image;
+          createFaceMesh(image);
           faceStatus.textContent = '✓ جاهزة';
           faceStatus.classList.add('ready');
-          paintHeadTexture();
-          status.textContent = 'تم تطبيق صورة الوجه الأمامي كما هي.';
+          status.textContent = 'تم تطبيق صورة الوجه كاملة. اسحب لرؤية الجوانب.';
         },
         (err) => { status.textContent = err; }
       );
@@ -645,19 +564,22 @@
       handleUpload(
         file,
         (image) => {
-          sidePhoto = image;
+          createSideMesh(image);
           sideStatus.textContent = '✓ جاهزة';
           sideStatus.classList.add('ready');
-          paintHeadTexture();
-          status.textContent = 'تم تطبيق صورة الجوانب كما هي.';
+          status.textContent = 'تم تطبيق صورة الجوانب.';
         },
         (err) => { status.textContent = err; }
       );
     });
 
     window.addEventListener('beforeunload', () => {
-      headTexture.dispose();
-      skinMaterial.dispose();
+      if (faceMesh) {
+        if (faceMesh.material.map) faceMesh.material.map.dispose();
+        faceMesh.material.dispose();
+        faceMesh.geometry.dispose();
+      }
+      skullMaterial.dispose();
       renderer.dispose();
     });
   </script>
