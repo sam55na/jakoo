@@ -149,7 +149,7 @@
 
   <section class="upload-section" aria-label="رفع الصور">
     <label class="upload-label" for="faceUpload">
-      <span aria-hidden="true">🙂</span> صورة الوجه (PNG شفاف أفضل)
+      <span aria-hidden="true">🙂</span> صورة الوجه (PNG شفاف)
       <input type="file" id="faceUpload" accept="image/*">
     </label>
     <span class="upload-status" id="faceStatus">لم تُرفع</span>
@@ -162,7 +162,7 @@
   </section>
 
   <p class="hint">
-    💡 للحصول على أفضل نتيجة: ارفع صورة PNG بخلفية شفافة. تُعرض الصورة كاملة بدون أي تكبير أو تغيير.
+    💡 ارفع صورة PNG بخلفية شفافة. الصورة تُقصّ تلقائياً على شكل الرأس وتُعرض كاملة بدون أي تغيير.
   </p>
   <p class="status" id="status" aria-live="polite"></p>
 
@@ -196,7 +196,6 @@
     const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
     camera.position.set(0, 0.05, 5.6);
 
-    // إضاءة ناعمة
     scene.add(new THREE.HemisphereLight(0xe5edff, 0x453326, 2.0));
 
     const keyLight = new THREE.DirectionalLight(0xffe2ca, 2.6);
@@ -211,34 +210,30 @@
     rimLight.position.set(1.5, 3.0, -3.0);
     scene.add(rimLight);
 
-    // ✅ المجموعة الرئيسية التي تحتوي على كل شيء
     const headGroup = new THREE.Group();
     scene.add(headGroup);
 
     // ============================================================
-    // ✅ خصائص الرأس — أبعاد متناسقة
+    // أبعاد الرأس
     // ============================================================
-    const HEAD_W = 1.55;       // عرض الرأس
-    const HEAD_H = 2.0;        // ارتفاع الرأس
-    const HEAD_D = 1.15;       // عمق الرأس
-    const FACE_PLANE_Z = 0.62; // مكان مستوى الوجه الأمامي (أمام المجسم)
+    const HEAD_W = 1.55;
+    const HEAD_H = 2.0;
+    const HEAD_D = 1.15;
 
     // ============================================================
-    // ✅ 1) مجسم الجمجمة (3D) — الشكل البيضوي المقلوب
-    //    هذا يعطي الحجم الحقيقي للرأس
+    // ✅ بناء الرأس — نفس المجسم يُستخدم للنقش والجمجمة
     // ============================================================
-    function makeSkullGeometry() {
-      const around = 96;
-      const vertical = 120;
+    function makeHeadGeometry(offsetZ = 0, scale = 1) {
+      const around = 128;
+      const vertical = 160;
 
       const positions = [];
       const uvs = [];
       const indices = [];
 
-      // الشكل: أعلى عريض (جمجمة) + أسفل مدبب (فك)
-      const rx = HEAD_W / 2;      // نصف العرض
-      const rz = HEAD_D / 2;      // نصف العمق
-      const ry = HEAD_H / 2;      // نصف الارتفاع
+      const rx = (HEAD_W / 2) * scale;
+      const rz = (HEAD_D / 2) * scale;
+      const ry = (HEAD_H / 2) * scale;
 
       for (let j = 0; j <= vertical; j++) {
         const v = j / vertical;
@@ -248,15 +243,10 @@
         // ✅ الشكل البيضوي المقلوب
         let ring;
         if (yn >= 0) {
-          // النصف العلوي: عريض (جمجمة)
           ring = Math.pow(Math.max(0, 1 - yn * yn), 0.40);
         } else {
-          // النصف السفلي: مدبب (فك)
           ring = Math.pow(Math.max(0, 1 - yn * yn), 0.65);
         }
-
-        // ✅ إضافة تفاصيل الوجه للعمق (أنف، جبهة، فك)
-        const faceBulge = (yn > -0.5 && yn < 0.7) ? 0.10 * Math.exp(-Math.pow(yn / 0.5, 2)) : 0;
 
         for (let i = 0; i <= around; i++) {
           const u = i / around;
@@ -265,11 +255,26 @@
           const c = Math.cos(theta);
 
           const x = rx * ring * s;
-          let z = rz * ring * c;
+          let z = rz * ring * c + offsetZ;
 
-          // نتوء أمامي (وجه)
+          // ✅ نتوءات الوجه (أنف، جبهة، فك) للواقعية
           if (c > 0) {
-            z += faceBulge * Math.pow(c, 3);
+            const front = Math.pow(c, 5);
+            const g = (cx, cy, wx, wy) =>
+              Math.exp(
+                -Math.pow((x - cx) / wx, 2) -
+                Math.pow((y - cy) / wy, 2)
+              );
+
+            let relief = 0;
+            relief += 0.030 * g(0, 0.55, 0.6, 0.35);    // جبهة
+            relief += 0.035 * g(0, 0.10, 0.09, 0.35);   // جسر الأنف
+            relief += 0.055 * g(0, -0.18, 0.14, 0.14);  // رأس الأنف
+            relief += 0.025 * (g(-0.45, -0.05, 0.22, 0.22) + g(0.45, -0.05, 0.22, 0.22)); // وجنتين
+            relief += 0.018 * g(0, -0.75, 0.35, 0.20);  // فك
+            relief -= 0.010 * (g(-0.28, 0.28, 0.17, 0.10) + g(0.28, 0.28, 0.17, 0.10)); // تجويف عين
+
+            z += front * relief;
           }
 
           positions.push(x, y, z);
@@ -292,160 +297,245 @@
     }
 
     // ============================================================
-    // ✅ 2) مستوى الوجه الأمامي (Plane) — يحمل الصورة كاملة
-    //    منحني قليلاً ليتبع شكل الوجه
-    // ============================================================
-    function makeFacePlaneGeometry() {
-      const widthSegments = 40;
-      const heightSegments = 40;
-
-      const positions = [];
-      const uvs = [];
-      const indices = [];
-
-      const w = HEAD_W * 0.98;   // عرض المستوى
-      const h = HEAD_H * 0.98;   // ارتفاع المستوى
-
-      for (let j = 0; j <= heightSegments; j++) {
-        const v = j / heightSegments;
-        const y = (0.5 - v) * h;  // من +h/2 إلى -h/2 (أعلى لأسفل)
-        const yn = y / (h / 2);
-
-        for (let i = 0; i <= widthSegments; i++) {
-          const u = i / widthSegments;
-          const x = (u - 0.5) * w;
-          const xn = x / (w / 2);
-
-          // ✅ انحناء بسيط على شكل قوس أفقي (ليتبع استدارة الوجه)
-          // وعمودي (ليتبع انحناء الجبهة/الذقن)
-          const curveH = Math.sqrt(Math.max(0, 1 - xn * xn * 0.35));
-          const curveV = Math.sqrt(Math.max(0, 1 - yn * yn * 0.15));
-
-          const z = FACE_PLANE_Z * curveH * curveV;
-
-          positions.push(x, y, z);
-          uvs.push(u, 1 - v);  // 1-v لعكس الاتجاه (الصورة من الأعلى)
-        }
-      }
-
-      for (let j = 0; j < heightSegments; j++) {
-        for (let i = 0; i < widthSegments; i++) {
-          const a = j * (widthSegments + 1) + i;
-          const b = a + widthSegments + 1;
-          indices.push(a, b, a + 1);
-          indices.push(a + 1, b, b + 1);
-        }
-      }
-
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-      geometry.setIndex(indices);
-      geometry.computeVertexNormals();
-      return geometry;
-    }
-
-    // ============================================================
-    // ✅ 3) مجسم الجوانب (يحيط بالجزء الخلفي)
-    // ============================================================
-    function makeSideGeometry() {
-      // نستخدم نفس شكل الجمجمة لكن أصغر بقليل ونعطيه إزاحة خلفية
-      return makeSkullGeometry();
-    }
-
-    // ============================================================
-    // مواد الجمجمة (بدون صورة) — لون بشرة رمادي داكن طبيعي
+    // ✅ طبقة 1: الجمجمة الأساسية (احتياطية، تُخفى عندما ترفع صورة)
     // ============================================================
     const skullMaterial = new THREE.MeshStandardMaterial({
       color: 0x6b5a4e,
-      roughness: 0.85,
-      metalness: 0,
-      side: THREE.FrontSide
+      roughness: 0.9,
+      metalness: 0
     });
 
-    const skull = new THREE.Mesh(makeSkullGeometry(), skullMaterial);
+    const skull = new THREE.Mesh(makeHeadGeometry(), skullMaterial);
     headGroup.add(skull);
 
     // ============================================================
-    // ✅ مادة الوجه — تحمل الصورة كاملة مع شفافية
+    // ✅ طبقة 2: الوجه المنقوش بالصورة
+    //    نفس شكل المجسم بالضبط + توسيع بسيط جداً (0.5%)
+    //    حتى يغطي الجمجمة تماماً بدون أي حواف
     // ============================================================
     const faceMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
-      roughness: 0.7,
+      roughness: 0.72,
       metalness: 0,
       transparent: true,
-      alphaTest: 0.01,
-      side: THREE.DoubleSide,
-      depthWrite: true
+      alphaTest: 0.02,     // يخفي البكسلات الشفافة تماماً
+      side: THREE.FrontSide
     });
 
+    // ✅ نفس المجسم لكن بمقياس أكبر بـ 0.5% ليغطي الجمجمة
+    const faceGeometry = makeHeadGeometry(0, 1.005);
+    const faceMesh = new THREE.Mesh(faceGeometry, faceMaterial);
+    headGroup.add(faceMesh);
+
     // ============================================================
-    // ✅ مادة الجوانب (اختيارية)
+    // ✅ طبقة 3: الجوانب (اختيارية) — نفس المجسم بمقياس 1.01
+    //    تُستخدم فقط إذا رفع المستخدم صورة جوانب
     // ============================================================
     const sideMaterial = new THREE.MeshStandardMaterial({
-      color: 0x8a7565,
+      color: 0xffffff,
       roughness: 0.85,
       metalness: 0,
       transparent: true,
-      side: THREE.DoubleSide
+      alphaTest: 0.02,
+      side: THREE.FrontSide
     });
 
-    // ============================================================
-    // ✅ تحميل صورة الوجه (بدون أي تعديل)
-    // ============================================================
-    let faceMesh = null;
-    let sideMesh = null;
+    const sideGeometry = makeHeadGeometry(0, 1.01);
+    const sideMesh = new THREE.Mesh(sideGeometry, sideMaterial);
+    sideMesh.visible = false;
+    headGroup.add(sideMesh);
 
-    function createFaceMesh(image) {
-      // إزالة القديم
-      if (faceMesh) {
-        headGroup.remove(faceMesh);
-        if (faceMesh.material.map) faceMesh.material.map.dispose();
-        faceMesh.material.dispose();
-        faceMesh.geometry.dispose();
+    // ============================================================
+    // ✅ تحضير نقش الصورة
+    //
+    // المنطق:
+    // 1. نرسم الصورة على canvas بحدود UV (u من 0 إلى 1)
+    // 2. نضيف خلفية بلون من حواف الصورة (لتغطية أطراف UV)
+    // 3. الصورة تظهر كاملة في منتصف الوجه (u=0.25..0.75)
+    // 4. الجوانب تأخذ ألوانها من حواف الصورة
+    // ============================================================
+    const TEX_W = 2048;
+    const TEX_H = 2048;
+
+    function prepareFaceTexture(image, canvas, ctx) {
+      ctx.clearRect(0, 0, TEX_W, TEX_H);
+
+      // نرسم الصورة في المنطقة الأمامية (u = 0.25 → 0.75)
+      const faceX = TEX_W * 0.25;
+      const faceW = TEX_W * 0.50;
+
+      // ✅ الصورة تُرسم كاملة، بدون تكبير أو قص
+      //    نحافظ على نسبتها الطبيعية ونوسّطها في المنطقة
+      const imgAspect = image.width / image.height;
+      const boxAspect = faceW / TEX_H;
+
+      let drawW, drawH, drawX, drawY;
+      if (imgAspect >= boxAspect) {
+        // الصورة أعرض من الصندوق
+        drawW = faceW;
+        drawH = faceW / imgAspect;
+        drawX = faceX;
+        drawY = (TEX_H - drawH) / 2;
+      } else {
+        // الصورة أطول من الصندوق
+        drawH = TEX_H;
+        drawW = TEX_H * imgAspect;
+        drawX = faceX + (faceW - drawW) / 2;
+        drawY = 0;
       }
 
-      // ✅ تحميل الصورة كنقش مباشر — بدون canvas وسيط
-      const texture = new THREE.Texture(image);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      texture.minFilter = THREE.LinearMipmapLinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.generateMipmaps = true;
-      // ✅ مهم: الصورة تُعرض كما هي بدون قلب
-      texture.flipY = true;
-      texture.needsUpdate = true;
+      // استخراج ألوان من حواف الصورة
+      const sampleCanvas = document.createElement('canvas');
+      sampleCanvas.width = 64;
+      sampleCanvas.height = 64;
+      const sampleCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
+      sampleCtx.drawImage(image, 0, 0, 64, 64);
 
-      faceMaterial.map = texture;
-      faceMaterial.needsUpdate = true;
+      // متوسط اللون من كل الأطراف
+      const topData = sampleCtx.getImageData(0, 0, 64, 2).data;
+      const bottomData = sampleCtx.getImageData(0, 62, 64, 2).data;
+      const leftData = sampleCtx.getImageData(0, 0, 2, 64).data;
+      const rightData = sampleCtx.getImageData(62, 0, 2, 64).data;
 
-      faceMesh = new THREE.Mesh(makeFacePlaneGeometry(), faceMaterial);
-      headGroup.add(faceMesh);
-    }
-
-    function createSideMesh(image) {
-      if (sideMesh) {
-        headGroup.remove(sideMesh);
-        if (sideMesh.material.map) sideMesh.material.map.dispose();
-        sideMesh.material.dispose();
-        sideMesh.geometry.dispose();
+      function avg(data) {
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] < 20) continue;
+          r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
+        }
+        if (!n) return { r: 120, g: 110, b: 100 };
+        return { r: Math.round(r/n), g: Math.round(g/n), b: Math.round(b/n) };
       }
 
-      const texture = new THREE.Texture(image);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      texture.flipY = true;
-      texture.needsUpdate = true;
+      const cTop = avg(topData);
+      const cBottom = avg(bottomData);
+      const cLeft = avg(leftData);
+      const cRight = avg(rightData);
 
-      sideMaterial.map = texture;
-      sideMaterial.color.set(0xffffff);
-      sideMaterial.needsUpdate = true;
+      // ✅ تعبئة الخلفية بتدرج من 4 ألوان مستخرجة
+      // (تعبئة كامل القماش أولاً لضمان عدم وجود فراغات)
+      const gradV = ctx.createLinearGradient(0, 0, 0, TEX_H);
+      gradV.addColorStop(0, `rgb(${cTop.r},${cTop.g},${cTop.b})`);
+      gradV.addColorStop(1, `rgb(${cBottom.r},${cBottom.g},${cBottom.b})`);
+      ctx.fillStyle = gradV;
+      ctx.fillRect(0, 0, TEX_W, TEX_H);
 
-      sideMesh = new THREE.Mesh(makeSideGeometry(), sideMaterial);
-      // الجوانب أكبر بقليل من الجمجمة لتغطيها
-      sideMesh.scale.set(1.02, 1.02, 1.02);
-      headGroup.add(sideMesh);
+      const gradH = ctx.createLinearGradient(0, 0, TEX_W, 0);
+      gradH.addColorStop(0, `rgba(${cLeft.r},${cLeft.g},${cLeft.b},0.6)`);
+      gradH.addColorStop(0.25, `rgba(${cLeft.r},${cLeft.g},${cLeft.b},0)`);
+      gradH.addColorStop(0.75, `rgba(${cRight.r},${cRight.g},${cRight.b},0)`);
+      gradH.addColorStop(1, `rgba(${cRight.r},${cRight.g},${cRight.b},0.6)`);
+      ctx.fillStyle = gradH;
+      ctx.fillRect(0, 0, TEX_W, TEX_H);
+
+      // ✅ رسم الصورة كاملة بنسبتها الطبيعية
+      ctx.drawImage(
+        image,
+        0, 0, image.width, image.height,
+        drawX, drawY, drawW, drawH
+      );
+
+      // ✅ دمج ناعم عند الحدود (يمنع الحواف المستقيمة الظاهرة)
+      // تدرج تلاشي على الحدود اليمنى واليسرى للصورة
+      const blendW = TEX_W * 0.03;
+
+      const gl = ctx.createLinearGradient(faceX - blendW, 0, faceX, 0);
+      gl.addColorStop(0, `rgba(${cLeft.r},${cLeft.g},${cLeft.b},1)`);
+      gl.addColorStop(1, `rgba(${cLeft.r},${cLeft.g},${cLeft.b},0)`);
+      ctx.fillStyle = gl;
+      ctx.fillRect(faceX - blendW, 0, blendW, TEX_H);
+
+      const gr = ctx.createLinearGradient(faceX + faceW, 0, faceX + faceW + blendW, 0);
+      gr.addColorStop(0, `rgba(${cRight.r},${cRight.g},${cRight.b},0)`);
+      gr.addColorStop(1, `rgba(${cRight.r},${cRight.g},${cRight.b},1)`);
+      ctx.fillStyle = gr;
+      ctx.fillRect(faceX + faceW, 0, blendW, TEX_H);
     }
+
+    // ============================================================
+    // رفع الصور
+    // ============================================================
+    function handleUpload(file, onLoad, onError) {
+      if (!file.type.startsWith('image/')) {
+        onError('الرجاء اختيار ملف صورة صالح');
+        return;
+      }
+      const image = new Image();
+      image.onload = () => {
+        onLoad(image);
+        URL.revokeObjectURL(image.src);
+      };
+      image.onerror = () => {
+        onError('تعذر تحميل الصورة');
+        URL.revokeObjectURL(image.src);
+      };
+      image.src = URL.createObjectURL(file);
+    }
+
+    faceUpload.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      handleUpload(
+        file,
+        (image) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = TEX_W;
+          canvas.height = TEX_H;
+          const ctx = canvas.getContext('2d');
+          prepareFaceTexture(image, canvas, ctx);
+
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+          texture.needsUpdate = true;
+
+          if (faceMaterial.map) faceMaterial.map.dispose();
+          faceMaterial.map = texture;
+          faceMaterial.needsUpdate = true;
+
+          // إخفاء الجمجمة عندما تُرفع صورة
+          skull.visible = false;
+
+          faceStatus.textContent = '✓ جاهزة';
+          faceStatus.classList.add('ready');
+          status.textContent = 'تم تطبيق صورة الوجه كاملة. اسحب لرؤية الجوانب.';
+        },
+        (err) => { status.textContent = err; }
+      );
+    });
+
+    sideUpload.addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      handleUpload(
+        file,
+        (image) => {
+          const canvas = document.createElement('canvas');
+          canvas.width = TEX_W;
+          canvas.height = TEX_H;
+          const ctx = canvas.getContext('2d');
+          prepareFaceTexture(image, canvas, ctx);
+
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+          texture.needsUpdate = true;
+
+          if (sideMaterial.map) sideMaterial.map.dispose();
+          sideMaterial.map = texture;
+          sideMaterial.needsUpdate = true;
+
+          sideMesh.visible = true;
+
+          sideStatus.textContent = '✓ جاهزة';
+          sideStatus.classList.add('ready');
+          status.textContent = 'تم تطبيق صورة الجوانب.';
+        },
+        (err) => { status.textContent = err; }
+      );
+    });
 
     // ============================================================
     // دوران
@@ -525,60 +615,11 @@
     container.addEventListener('pointercancel', stopDrag);
     container.addEventListener('lostpointercapture', stopDrag);
 
-    // رفع الصور
-    function handleUpload(file, onLoad, onError) {
-      if (!file.type.startsWith('image/')) {
-        onError('الرجاء اختيار ملف صورة صالح');
-        return;
-      }
-      const image = new Image();
-      image.onload = () => {
-        onLoad(image);
-        URL.revokeObjectURL(image.src);
-      };
-      image.onerror = () => {
-        onError('تعذر تحميل الصورة');
-        URL.revokeObjectURL(image.src);
-      };
-      image.src = URL.createObjectURL(file);
-    }
-
-    faceUpload.addEventListener('change', (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      handleUpload(
-        file,
-        (image) => {
-          createFaceMesh(image);
-          faceStatus.textContent = '✓ جاهزة';
-          faceStatus.classList.add('ready');
-          status.textContent = 'تم تطبيق صورة الوجه كاملة. اسحب لرؤية الجوانب.';
-        },
-        (err) => { status.textContent = err; }
-      );
-    });
-
-    sideUpload.addEventListener('change', (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      handleUpload(
-        file,
-        (image) => {
-          createSideMesh(image);
-          sideStatus.textContent = '✓ جاهزة';
-          sideStatus.classList.add('ready');
-          status.textContent = 'تم تطبيق صورة الجوانب.';
-        },
-        (err) => { status.textContent = err; }
-      );
-    });
-
     window.addEventListener('beforeunload', () => {
-      if (faceMesh) {
-        if (faceMesh.material.map) faceMesh.material.map.dispose();
-        faceMesh.material.dispose();
-        faceMesh.geometry.dispose();
-      }
+      if (faceMaterial.map) faceMaterial.map.dispose();
+      if (sideMaterial.map) sideMaterial.map.dispose();
+      faceMaterial.dispose();
+      sideMaterial.dispose();
       skullMaterial.dispose();
       renderer.dispose();
     });
